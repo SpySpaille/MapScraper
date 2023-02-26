@@ -24,7 +24,7 @@ $ - 🔊 Extract Sounds (y/n) > y
 Output:
 ```console
 $ - ✅ 33 materials have been extracted to the output folder
-$ - 🗒️ 12 sounds have been extracted to the output folder
+$ - ✅ 12 sounds have been extracted to the output folder
 ```
 All extracted content will be in the folder named "output", make sure you have placed the executable in a dedicated folder to see the output folder.
 

@@ -11,7 +11,7 @@ const TextureGettersURL = "https://raw.githubusercontent.com/SpySpaille/MapScrap
 fetch(TextureGettersURL).then(response => response.text()).then(text => {
     // For each line in the pastebin, add it to the array
     const TextureGetters = text.split('\n').map(line => line.trim());
-    
+
     fse.removeSync(outputDir);
     fse.ensureDirSync(outputDir);
 
@@ -31,9 +31,9 @@ fetch(TextureGettersURL).then(response => response.text()).then(text => {
         // Copy materials to output directory
         const sourcePath = path.join(gpath, 'materials', material + '.vmt');
         const destPath = path.join(outputDir, 'materials', material.toLowerCase() + '.vmt');
-        fse.copySync(sourcePath, destPath).catch(err => {
-            console.log(err);
-        });
+        if (sourcePath.exists()) {
+            fse.copySync(sourcePath, destPath);
+        }
 
         // Get VTFs from materials
         const textures = [];
@@ -56,9 +56,10 @@ fetch(TextureGettersURL).then(response => response.text()).then(text => {
         textures.forEach(texture => {
             const sourcePath = path.join(gpath, 'materials', texture + '.vtf');
             const destPath = path.join(outputDir, 'materials', texture.toLowerCase() + '.vtf');
-            fse.copySync(sourcePath, destPath).catch(err => {
-                console.log(err);
-            });
+            // Check if source file exists
+            if (sourcePath.exists()) {
+                fse.copySync(sourcePath, destPath);
+            }
         });
     });
 });

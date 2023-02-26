@@ -6,6 +6,7 @@
   "author": "SpySpaille",
   "license": "ISC",
   "dependencies": {
-    "fs-extra": "^11.1.0"
+    "fs-extra": "^11.1.0",
+    "source-mdl": "^0.2.4"
   }
 }

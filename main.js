@@ -6,7 +6,7 @@ const outputDir = './output';
 const gpath = "E:\\Program Files (x86)\\Steam\\steamapps\\common\\GarrysMod\\garrysmod";
 const file = "texturefinder.vmf";
 const vmfContent = fs.readFileSync(file, 'utf-8');
-const TextureGettersURL = "https://pastebin.com/raw/1cR1XKww";
+const TextureGettersURL = "https://raw.githubusercontent.com/SpySpaille/MapScraper/main/TextureGetter.txt";
 
 fetch(TextureGettersURL).then(response => response.text()).then(text => {
     // For each line in the pastebin, add it to the array
@@ -31,7 +31,9 @@ fetch(TextureGettersURL).then(response => response.text()).then(text => {
         // Copy materials to output directory
         const sourcePath = path.join(gpath, 'materials', material + '.vmt');
         const destPath = path.join(outputDir, 'materials', material.toLowerCase() + '.vmt');
-        fse.copySync(sourcePath, destPath);
+        fse.copySync(sourcePath, destPath).catch(err => {
+            console.log(err);
+        });
 
         // Get VTFs from materials
         const textures = [];
@@ -54,7 +56,9 @@ fetch(TextureGettersURL).then(response => response.text()).then(text => {
         textures.forEach(texture => {
             const sourcePath = path.join(gpath, 'materials', texture + '.vtf');
             const destPath = path.join(outputDir, 'materials', texture.toLowerCase() + '.vtf');
-            fse.copySync(sourcePath, destPath);
+            fse.copySync(sourcePath, destPath).catch(err => {
+                console.log(err);
+            });
         });
     });
 });

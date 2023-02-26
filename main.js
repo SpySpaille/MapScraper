@@ -1,10 +1,11 @@
 const fs = require('fs');
 const fse = require('fs-extra');
+const { type } = require('os');
 const path = require('path');
 
 const outputDir = './output';
 const gpath = "E:\\Program Files (x86)\\Steam\\steamapps\\common\\GarrysMod\\garrysmod";
-const file = "texturefinder.vmf";
+const file = "rp_site_kb_v1.vmf";
 const vmfContent = fs.readFileSync(file, 'utf-8');
 const TextureGettersURL = "https://raw.githubusercontent.com/SpySpaille/MapScraper/main/TextureGetter.txt";
 
@@ -33,17 +34,18 @@ fetch(TextureGettersURL).then(response => response.text()).then(text => {
         const destPath = path.join(outputDir, 'materials', material.toLowerCase() + '.vmt');
         try {
             fse.copySync(sourcePath, destPath);
-        } catch (err) {
-            console.log(err);
-        }
+        } catch (err) { return; }
 
         // Get VTFs from materials
         const textures = [];
-        const materialContent = fs.readFileSync(sourcePath, 'utf-8').replace(/"/g, '').replace(/\\/g, '/');
+        let materialContent;
+        try {
+            materialContent = fs.readFileSync(sourcePath, 'utf-8').replace(/"/g, '').replace(/\\/g, '/');
+        } catch (err) { return; }
 
         TextureGetters.forEach(getter => {
             if (materialContent.includes(getter)) {
-                const regex = new RegExp(`\\${getter}\\s*([^\\s]+)`, 'g');
+                const regex = new RegExp(`\\${getter} \\s*([^\\s]+)`, 'g');
                 let match;
                 while (match = regex.exec(materialContent)) {
                     const texture = match[1];
@@ -58,11 +60,10 @@ fetch(TextureGettersURL).then(response => response.text()).then(text => {
         textures.forEach(texture => {
             const sourcePath = path.join(gpath, 'materials', texture + '.vtf');
             const destPath = path.join(outputDir, 'materials', texture.toLowerCase() + '.vtf');
+            console.log(texture);
             try {
                 fse.copySync(sourcePath, destPath);
-            } catch (err) {
-                console.log(err);
-            }
+            } catch (err) { return; }
         });
     });
 });

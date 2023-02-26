@@ -31,8 +31,10 @@ fetch(TextureGettersURL).then(response => response.text()).then(text => {
         // Copy materials to output directory
         const sourcePath = path.join(gpath, 'materials', material + '.vmt');
         const destPath = path.join(outputDir, 'materials', material.toLowerCase() + '.vmt');
-        if (sourcePath.exists()) {
+        try {
             fse.copySync(sourcePath, destPath);
+        } catch (err) {
+            console.log(err);
         }
 
         // Get VTFs from materials
@@ -56,9 +58,10 @@ fetch(TextureGettersURL).then(response => response.text()).then(text => {
         textures.forEach(texture => {
             const sourcePath = path.join(gpath, 'materials', texture + '.vtf');
             const destPath = path.join(outputDir, 'materials', texture.toLowerCase() + '.vtf');
-            // Check if source file exists
-            if (sourcePath.exists()) {
+            try {
                 fse.copySync(sourcePath, destPath);
+            } catch (err) {
+                console.log(err);
             }
         });
     });

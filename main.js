@@ -107,8 +107,6 @@ function getModels() {
                 textures.forEach(texture => {
                     const sourcePath = path.join(gpath, 'materials', textureDir, texture + '.vmt');
                     const destPath = path.join(outputDir, 'materials', textureDir, texture + '.vmt');
-                    console.log(sourcePath);
-                    console.log(destPath);
                     try {
                         fse.copySync(sourcePath, destPath);
                     } catch (err) { return; }
@@ -127,18 +125,26 @@ function getSounds() {
         const sounds = [];
 
         SoundGetters.forEach(getter => {
-            const regex = new RegExp(`\\${getter} \\s*([^\\s]+)`, 'g');
+            const regex = new RegExp(`\\"${getter}\\"\\s*\\"([^"]+)\\"`, 'g');
             let match;
             while (match = regex.exec(vmfContent)) {
                 const sound = match[1];
                 if (!sounds.includes(sound)) {
-                    console.log(sound);
                     sounds.push(sound);
                 }
             }
+        });
+
+        sounds.forEach(sound => {
+            const sourcePath = path.join(gpath, 'sound', sound);
+            const destPath = path.join(outputDir, 'sound', sound.toLowerCase());
+            try {
+                fse.copySync(sourcePath, destPath);
+            } catch (err) { return; }
         });
     });
 }
 
 getMaterials();
 getModels();
+getSounds();

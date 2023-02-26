@@ -5,7 +5,7 @@ MapScraper is a Source Engine script that extracts a map's content, such as mode
 
 
 ## Installation
-[![AGPL License](https://img.shields.io/github/downloads/SpySpaille/MapScraper/total)](http://www.gnu.org/licenses/agpl-3.0)
+[![Latest Release](https://img.shields.io/github/downloads/SpySpaille/MapScraper/total)](https://github.com/SpySpaille/MapScraper/releases/latest)
 
 - Download the latest release **[here](https://github.com/SpySpaille/MapScraper/releases/latest)**
 - Place the executable in a **dedicated** folder

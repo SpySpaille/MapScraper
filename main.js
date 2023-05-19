@@ -127,11 +127,11 @@ app.listen(3000, () => {
 
         // Get all materials
         function getMaterials() {
-            const matgeters = ["material", "texture", "detailmaterial"];
+            const matgeters = ["texture", "detailmaterial"];
             const materials = [];
 
             matgeters.forEach(getter => {
-                const regex = new RegExp(`\\${getter} \\s*([^\\s]+)`, 'g');
+                const regex = new RegExp(`\\"${getter}\\"\\s*\\"([^"]+)\\"`, 'g');
 
                 let match;
                 while (match = regex.exec(vmfContent)) {
@@ -140,16 +140,6 @@ app.listen(3000, () => {
                         materials.push(material);
                     }
                 }
-
-                materials.forEach(material => {
-                    const sourcePath = path.join(gpath, 'materials', material + '.vmt');
-                    const destPath = path.join(outputDir, 'materials', material.toLowerCase() + '.vmt');
-                    try {
-                        fse.copySync(sourcePath, destPath);
-                    } catch (err) { return; }
-
-                    VTFfromVMT(sourcePath, outputDir);
-                });
             });
 
             // Get the skybox
@@ -166,6 +156,16 @@ app.listen(3000, () => {
                     materials.push(`skybox/${skybox}bk`);
                 }
             }
+
+            materials.forEach(material => {
+                const sourcePath = path.join(gpath, 'materials', material + '.vmt');
+                const destPath = path.join(outputDir, 'materials', material.toLowerCase() + '.vmt');
+                try {
+                    fse.copySync(sourcePath, destPath);
+                } catch (err) { return; }
+
+                VTFfromVMT(sourcePath, outputDir);
+            });
 
             console.log(`\n✅ \x1b[32m${materials.length} \x1b[37mmaterials have been extracted to the output folder`);
         }

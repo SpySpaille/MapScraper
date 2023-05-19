@@ -127,7 +127,7 @@ app.listen(3000, () => {
 
         // Get all materials
         function getMaterials() {
-            const matgeters = ["texture", "detailmaterial"];
+            const matgeters = ["material", "texture", "detailmaterial"];
             const materials = [];
 
             matgeters.forEach(getter => {

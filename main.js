@@ -14,6 +14,14 @@ app.listen(3000, () => {
     const { version } = require('./package.json');
     const latestURL = "https://raw.githubusercontent.com/SpySpaille/MapScraper/main/package.json";
 
+    function waitForExit() {
+        console.log('Press enter to close the program');
+        process.stdin.resume(); // Attend l'entrée de l'utilisateur
+        process.stdin.on('data', function () {
+            process.exit(); // Ferme le programme lorsque l'entrée est détectée
+        });
+    }
+
     fetch(latestURL).then(response => response.json()).then(json => {
         // Prompt for input
         prompt.message = '\x1b[90m-';
@@ -80,8 +88,9 @@ app.listen(3000, () => {
         });
     });
 
+
     // Begin of the script
-    function script(gpath, file, matbool, mdlbool, soundbool) {
+    async function script(gpath, file, matbool, mdlbool, soundbool) {
         const outputDir = './output';
         const vmfContent = fs.readFileSync(file, 'utf-8');
         const TextureGettersURL = "https://raw.githubusercontent.com/SpySpaille/MapScraper/main/Getters/TextureGetter.txt";
@@ -96,7 +105,7 @@ app.listen(3000, () => {
         function VTFfromVMT(sourcePath, outputDir) {
             fetch(TextureGettersURL).then(response => response.text()).then(text => {
                 const TextureGetters = text.split('\n').map(line => line.trim());
-                const textures = [];
+                let textures = [];
                 let materialContent;
                 try {
                     materialContent = fs.readFileSync(sourcePath, 'utf-8').replace(/"+/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -126,148 +135,159 @@ app.listen(3000, () => {
         }
 
         // Get all materials
-        function getMaterials() {
+        function getMaterials(n) {
             const matgeters = ["material", "texture", "detailmaterial"];
-            const materials = [];
+            let materials = [];
 
-            matgeters.forEach(getter => {
-                const regex = new RegExp(`\\"${getter}\\"\\s*\\"([^"]+)\\"`, 'g');
-
-                let match;
-                while (match = regex.exec(vmfContent)) {
-                    const material = match[1];
-                    if (!materials.includes(material)) {
-                        materials.push(material);
-                    }
-                }
-            });
-
-            // Get the skybox
-            const regex = /"skyname"\s*"([^"]+)"/g;
-            let match;
-            while (match = regex.exec(vmfContent)) {
-                const skybox = match[1];
-                if (!materials.includes(skybox)) {
-                    materials.push(`skybox/${skybox}up`);
-                    materials.push(`skybox/${skybox}dn`);
-                    materials.push(`skybox/${skybox}lf`);
-                    materials.push(`skybox/${skybox}rt`);
-                    materials.push(`skybox/${skybox}ft`);
-                    materials.push(`skybox/${skybox}bk`);
-                }
-            }
-
-            materials.forEach(material => {
-                const sourcePath = path.join(gpath, 'materials', material + '.vmt');
-                const destPath = path.join(outputDir, 'materials', material.toLowerCase() + '.vmt');
-                try {
-                    fse.copySync(sourcePath, destPath);
-                } catch (err) { return; }
-
-                VTFfromVMT(sourcePath, outputDir);
-            });
-
-            console.log(`\n✅ \x1b[32m${materials.length} \x1b[37mmaterials have been extracted to the output folder`);
-        }
-
-        // Get all models
-        function getModels() {
-            const regex = /"model"\s*"([^"]+)"/g;
-            const models = [];
-
-            let match;
-            while (match = regex.exec(vmfContent)) {
-                const model = match[1];
-                if (!models.includes(model)) {
-                    if (model.endsWith('.mdl')) {
-                        models.push(model);
-                    }
-                }
-            }
-
-            models.forEach(async model => {
-                modelsvariants.forEach(variant => {
-                    const sourcePath = path.join(gpath, model.replace('.mdl', variant));
-                    const destPath = path.join(outputDir, model.replace('.mdl', variant));
-                    try {
-                        fse.copySync(sourcePath, destPath);
-                    } catch (err) { return; }
-                });
-
-                try {
-                    let mdlData = fs.readFileSync(path.join(gpath, model));
-                    let mdl = new MDL();
-                    mdl.import({ mdlData });
-                    // Put mdl.getMetadata().textureDirs to lowercase into an array 
-                    const textures = mdl.getMetadata().textures.map(texture => texture.toLowerCase());
-                    const textureDirs = mdl.getMetadata().textureDirs.map(textureDir => textureDir.toLowerCase());
-                    textureDirs.forEach(textureDir => {
-                        textures.forEach(texture => {
-                            const sourcePath = path.join(gpath, 'materials', textureDir, texture + '.vmt');
-                            const destPath = path.join(outputDir, 'materials', textureDir, texture + '.vmt');
-                            try {
-                                fse.copySync(sourcePath, destPath);
-                            } catch (err) { return; }
-                            // Get VTFs from materials
-                            VTFfromVMT(sourcePath, outputDir);
-                        });
-                    });
-                } catch (err) { return; }
-            });
-            console.log(`\n✅ \x1b[32m${models.length} \x1b[37mmodels have been extracted to the output folder.\x1b[0m`);
-        }
-
-        // Get all sounds
-        function getSounds() {
-            fetch(SoundGettersURL).then(response => response.text()).then(text => {
-                const SoundGetters = text.split('\n').map(line => line.trim());
-                const sounds = [];
-
-                SoundGetters.forEach(getter => {
+            if (n == true) {
+                matgeters.forEach(getter => {
                     const regex = new RegExp(`\\"${getter}\\"\\s*\\"([^"]+)\\"`, 'g');
+
                     let match;
                     while (match = regex.exec(vmfContent)) {
-                        const sound = match[1];
-                        if (!sounds.includes(sound)) {
-                            sounds.push(sound);
+                        const material = match[1];
+                        if (!materials.includes(material)) {
+                            materials.push(material);
                         }
                     }
                 });
 
-                sounds.forEach(sound => {
-                    const sourcePath = path.join(gpath, 'sound', sound);
-                    const destPath = path.join(outputDir, 'sound', sound.toLowerCase());
+                // Get the skybox
+                const regex = /"skyname"\s*"([^"]+)"/g;
+                let match;
+                while (match = regex.exec(vmfContent)) {
+                    const skybox = match[1];
+                    if (!materials.includes(skybox)) {
+                        materials.push(`skybox/${skybox}up`);
+                        materials.push(`skybox/${skybox}dn`);
+                        materials.push(`skybox/${skybox}lf`);
+                        materials.push(`skybox/${skybox}rt`);
+                        materials.push(`skybox/${skybox}ft`);
+                        materials.push(`skybox/${skybox}bk`);
+                    }
+                }
+
+                materials.forEach(material => {
+                    const sourcePath = path.join(gpath, 'materials', material + '.vmt');
+                    const destPath = path.join(outputDir, 'materials', material.toLowerCase() + '.vmt');
                     try {
                         fse.copySync(sourcePath, destPath);
                     } catch (err) { return; }
+
+                    VTFfromVMT(sourcePath, outputDir);
                 });
-                console.log(`\n✅ \x1b[32m${sounds.length} \x1b[37msounds have been extracted to the output folder.\x1b[0m`);
-            });
-        }
-
-        // Get soundscapes
-        function getSoundscapes() {
-            if (vmfContent.includes('soundscape')) {
-                const sourcePath = path.join(gpath, `scripts`, `soundscapes_${file.replace('.vmf', '.txt')}`);
-                const destPath = path.join(outputDir, `scripts`, `soundscapes_${file.replace('.vmf', '.txt')}`);
-                try {
-                    fse.copySync(sourcePath, destPath);
-                } catch (err) { return; }
             }
+            console.log(`\n✅ \x1b[32m${materials.length} \x1b[37mmaterials have been extracted to the output folder`);
         }
 
-        if (matbool) {
-            getMaterials();
+        // Get all models
+        function getModels(n) {
+            const regex = /"model"\s*"([^"]+)"/g;
+            let models = [];
+
+            if (n == true) {
+                let match;
+                while (match = regex.exec(vmfContent)) {
+                    const model = match[1];
+                    if (!models.includes(model)) {
+                        if (model.endsWith('.mdl')) {
+                            models.push(model);
+                        }
+                    }
+                }
+
+                models.forEach(async model => {
+                    modelsvariants.forEach(variant => {
+                        const sourcePath = path.join(gpath, model.replace('.mdl', variant));
+                        const destPath = path.join(outputDir, model.replace('.mdl', variant));
+                        try {
+                            fse.copySync(sourcePath, destPath);
+                        } catch (err) { return; }
+                    });
+
+                    try {
+                        let mdlData = fs.readFileSync(path.join(gpath, model));
+                        let mdl = new MDL();
+                        mdl.import({ mdlData });
+                        // Put mdl.getMetadata().textureDirs to lowercase into an array 
+                        const textures = mdl.getMetadata().textures.map(texture => texture.toLowerCase());
+                        const textureDirs = mdl.getMetadata().textureDirs.map(textureDir => textureDir.toLowerCase());
+                        textureDirs.forEach(textureDir => {
+                            textures.forEach(texture => {
+                                const sourcePath = path.join(gpath, 'materials', textureDir, texture + '.vmt');
+                                const destPath = path.join(outputDir, 'materials', textureDir, texture + '.vmt');
+                                try {
+                                    fse.copySync(sourcePath, destPath);
+                                } catch (err) { return; }
+                                // Get VTFs from materials
+                                VTFfromVMT(sourcePath, outputDir);
+                            });
+                        });
+                    } catch (err) { return; }
+                });
+            }
+            console.log(`\n✅ \x1b[32m${models.length} \x1b[37mmodels have been extracted to the output folder.\x1b[0m`);
         }
-        if (mdlbool) {
-            getModels();
+
+        // Get all sounds
+        async function getSounds(n) {
+            let sounds = [];
+            await fetch(SoundGettersURL).then(response => response.text()).then(text => {
+                const SoundGetters = text.split('\n').map(line => line.trim());
+
+                if (n == true) {
+                    if (vmfContent.includes('soundscape')) {
+                        const sourcePath = path.join(gpath, `scripts`, `soundscapes_${file.replace('.vmf', '.txt')}`);
+                        const destPath = path.join(outputDir, `scripts`, `soundscapes_${file.replace('.vmf', '.txt')}`);
+                        try {
+                            fse.copySync(sourcePath, destPath);
+                        } catch (err) { return; }
+                    }
+
+                    SoundGetters.forEach(getter => {
+                        const regex = new RegExp(`\\"${getter}\\"\\s*\\"([^"]+)\\"`, 'g');
+                        let match;
+                        while (match = regex.exec(vmfContent)) {
+                            const sound = match[1];
+                            if (!sounds.includes(sound)) {
+                                sounds.push(sound);
+                            }
+                        }
+                    });
+
+                    sounds.forEach(sound => {
+                        const sourcePath = path.join(gpath, 'sound', sound);
+                        const destPath = path.join(outputDir, 'sound', sound.toLowerCase());
+                        try {
+                            fse.copySync(sourcePath, destPath);
+                        } catch (err) { return; }
+                    });
+                }
+            });
+            console.log(`\n✅ \x1b[32m${sounds.length} \x1b[37msounds have been extracted to the output folder.\x1b[0m`);
         }
-        if (soundbool) {
-            getSounds();
-            getSoundscapes();
-        }
+
         if (!matbool && !mdlbool && !soundbool) {
             console.log('\n❌ \x1b[31mYou have not selected anything. So I\'m not going to do anything, goodbye!\x1b[0m');
+        } else {
+            Promise.all([
+                getMaterials(matbool),
+                getModels(mdlbool),
+                getSounds(soundbool)
+            ]).then(() => {
+                console.log('\n✅ \x1b[32mAll done, goodbye!\x1b[0m');
+
+                // Do not close the program immediately, ask for input to close it
+                waitForExit();
+            })
         }
     }
+});
+
+// Error handling
+process.on('uncaughtException', function (err) {
+    console.log('\n❌ \x1b[31mAn error occured, please report it.\x1b[0m');
+    console.log(err);
+    // Do not close the program, ask for input to close it
+    waitForExit();
 });

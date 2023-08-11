@@ -280,47 +280,49 @@ async function getModels(gamepath, vmfContent, outputDir) {
 
 async function getSounds(gamepath, vmfContent, outputDir, file) {
     const loadingInterval = showLoadingIndicator('🔊 Extracting Sounds');
-    const response = await fetch(SoundGettersURL);
-    const text = await response.text();
-    const SoundGetters = text.split('\n').map(line => line.trim());
 
-    if (vmfContent.includes('soundscape')) {
-        const sourcePath = path.join(gamepath, `scripts`, `soundscapes_${file.replace('.vmf', '.txt')}`);
-        const destPath = path.join(outputDir, `scripts`, `soundscapes_${file.replace('.vmf', '.txt')}`);
-        try {
-            fse.copySync(sourcePath, destPath);
-        } catch (err) { return; }
-    }
+    try {
+        const response = await fetch(SoundGettersURL);
+        const text = await response.text();
+        const SoundGetters = text.split('\n').map(line => line.trim());
 
-    let sounds = [];
+        if (vmfContent.includes('soundscape')) {
+            const filename = file.split('\\').pop();
+            const soundscapesSourcePath = path.join(gamepath, 'scripts', `soundscapes_${filename.replace('.vmf', '.txt')}`);
+            const soundscapesDestPath = path.join(outputDir, 'scripts', `soundscapes_${filename.replace('.vmf', '.txt')}`);
+            await fse.copy(soundscapesSourcePath, soundscapesDestPath);
+        }
 
-    for (const getter of SoundGetters) {
-        const regex = new RegExp(`\\"${getter}\\"\\s*\\"([^"]+)\\"`, 'g');
-        let match;
+        const sounds = [];
 
-        while ((match = regex.exec(vmfContent))) {
-            const sound = match[1];
+        for (const getter of SoundGetters) {
+            const regex = new RegExp(`\\"${getter}\\"\\s*\\"([^"]+)\\"`, 'g');
+            let match;
 
-            if (!sounds.includes(sound)) {
-                sounds.push(sound);
+            while ((match = regex.exec(vmfContent))) {
+                const sound = match[1];
+
+                if (!sounds.includes(sound)) {
+                    sounds.push(sound);
+
+                    const sourcePath = path.join(gamepath, 'sound', sound);
+                    const destPath = path.join(outputDir, 'sound', sound.toLowerCase());
+
+                    try {
+                        await fse.copy(sourcePath, destPath);
+                    } catch (error) {
+                        handleError(error);
+                    }
+                }
             }
         }
+
+        clearInterval(loadingInterval);
+        process.stdout.write(`\r\x1b[90m${' '.repeat(50)}\r`); // Efface complètement la ligne
+        console.log(`\n✅ \x1b[32m${sounds.length} \x1b[37msounds have been extracted to the output folder.\x1b[0m`);
+    } catch (error) {
+        handleError(error);
     }
-
-    for (const sound of sounds) {
-        const sourcePath = path.join(gamepath, 'sound', sound);
-        const destPath = path.join(outputDir, 'sound', sound.toLowerCase());
-
-        try {
-            fse.copySync(sourcePath, destPath);
-        } catch (error) {
-            handleError(error);
-        }
-    }
-
-    clearInterval(loadingInterval);
-    process.stdout.write(`\r\x1b[90m${' '.repeat(50)}\r`); // Efface complètement la ligne
-    console.log(`\n✅ \x1b[32m${sounds.length} \x1b[37msounds have been extracted to the output folder.\x1b[0m`);
 }
 
 function handleError(error) {

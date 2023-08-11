@@ -174,7 +174,7 @@ async function VTFfromVMT(gamepath, sourcePath, outputDir) {
 }
 
 async function getMaterials(gamepath, vmfContent, outputDir) {
-    const loadingInterval = showLoadingIndicator('Extracting materials');
+    const loadingInterval = showLoadingIndicator('🧱 Extracting Materials');
     const matgeters = ["material", "texture", "detailmaterial"];
     let materials = [];
 
@@ -223,7 +223,7 @@ async function getMaterials(gamepath, vmfContent, outputDir) {
 }
 
 async function getModels(gamepath, vmfContent, outputDir) {
-    const loadingInterval = showLoadingIndicator('Extracting models');
+    const loadingInterval = showLoadingIndicator('📐 Extracting Models');
     const regex = /"model"\s*"([^"]+)"/g;
     let models = [];
 
@@ -279,10 +279,18 @@ async function getModels(gamepath, vmfContent, outputDir) {
 }
 
 async function getSounds(gamepath, vmfContent, outputDir) {
-    const loadingInterval = showLoadingIndicator('Extracting sounds');
+    const loadingInterval = showLoadingIndicator('🔊 Extracting Sounds');
     const response = await fetch(SoundGettersURL);
     const text = await response.text();
     const SoundGetters = text.split('\n').map(line => line.trim());
+
+    if (vmfContent.includes('soundscape')) {
+        const sourcePath = path.join(gamepath, `scripts`, `soundscapes_${file.replace('.vmf', '.txt')}`);
+        const destPath = path.join(outputDir, `scripts`, `soundscapes_${file.replace('.vmf', '.txt')}`);
+        try {
+            fse.copySync(sourcePath, destPath);
+        } catch (err) { return; }
+    }
 
     let sounds = [];
 

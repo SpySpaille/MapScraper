@@ -106,7 +106,7 @@ async function script(gamepath, file, matbool, mdlbool, soundbool) {
         }
 
         if (soundbool) {
-            await getSounds(gamepath, vmfContent, outputDir);
+            await getSounds(gamepath, vmfContent, outputDir, file);
         }
 
         console.log('\n✅ \x1b[32mAll done, goodbye!\x1b[0m');
@@ -278,7 +278,7 @@ async function getModels(gamepath, vmfContent, outputDir) {
     console.log(`\n✅ \x1b[32m${models.length} \x1b[37mmaterials have been extracted to the output folder\x1b[0m`);
 }
 
-async function getSounds(gamepath, vmfContent, outputDir) {
+async function getSounds(gamepath, vmfContent, outputDir, file) {
     const loadingInterval = showLoadingIndicator('🔊 Extracting Sounds');
     const response = await fetch(SoundGettersURL);
     const text = await response.text();

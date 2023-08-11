@@ -38,7 +38,7 @@ async function setup() {
     prompt.delimiter = ' ';
     prompt.start();
 
-    figlet('MapScrapper', function (err, data) {
+    figlet('MapScraper', function (err, data) {
         if (err) throw err;
         console.log(colors.green(data));
         console.log(`\x1b[90mMade by \x1b[37mSpySpaille \x1b[90mwith ❤️`);

@@ -71,7 +71,7 @@ async function setup(skip, gamepath) {
                               description: `💾 \x1b[37mUse last Game Path ?\x1b[90m (${lastGamePath}) >`,
                               required: true,
                               conform: value => value === 'y' || value === 'n',
-                              message: 'Invalid path'
+                              message: 'Invalid argument (use y or n)'
                         }
                   };
                   prompt.get({ properties: { ...configProperties } }, async function (err, result) {

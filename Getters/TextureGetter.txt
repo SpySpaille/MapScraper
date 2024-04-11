@@ -114,3 +114,4 @@ compress
 selfillummask
 stretch
 underwateroverlay
+tooltexture

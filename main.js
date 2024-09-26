@@ -278,11 +278,17 @@ async function VTFfromVMT(gamepath, sourcePath, outputDir) {
 			if (!AllTexturesCache.includes(texture)) {
 				AllTexturesCache.push(texture);
 
-				const sourcePath = path.join(gamepath, 'materials', texture + '.vtf')
-				if (!fs.existsSync(sourcePath)) continue;
+				const sourcePath = path.join(gamepath, 'materials', texture + '.vtf');
+				if (fs.existsSync(sourcePath)) {
+					const destPath = path.join(outputDir, 'materials', texture + '.vtf');
+					await fse.copy(sourcePath, destPath);
+				}
 
-				const destPath = path.join(outputDir, 'materials', texture + '.vtf')
-				await fse.copy(sourcePath, destPath);
+				const hdrSourcePath = path.join(gamepath, 'materials', texture + '.hdr.vtf');
+				if (fs.existsSync(hdrSourcePath)) {
+					const hdrDestPath = path.join(outputDir, 'materials', texture + '.hdr.vtf');
+					await fse.copy(hdrSourcePath, hdrDestPath);
+				}
 			}
 		}
 

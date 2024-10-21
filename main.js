@@ -498,7 +498,28 @@ async function getOthers(gamepath, vmfContent, outputDir, file) {
       if (fs.existsSync(particlesPath)) {
             addpackfile(`maps/${mapname}_particles.txt`);
             fs.readFileSync(particlesPath, 'utf-8').match(/"file"\s+"([^"]+)"/g)?.forEach(line => {
-                  files.push(line.match(/"file"\s+"([^"]+)"/)[1]);
+                  const file = line.match(/"file"\s+"([^"]+)"/)[1];
+                  files.push(file);
+                  if (file.endsWith('.pcf')) {
+                        const pcfPath = path.join(gamepath, file);
+                        if (fs.existsSync(pcfPath)) {
+                              const pcfData = fs.readFileSync(pcfPath);
+                              const text = pcfData.toString('latin1');
+                              const vmtMatches = text.match(/[\w\/\\.-]+\.vmt/g);
+                              if (vmtMatches) {
+                                    vmtMatches.forEach(async vmt => {
+                                          const sourcePath = path.join(gamepath, 'materials', vmt);
+                                          const destPath = path.join(outputDir, 'materials', vmt);
+                                          try {
+                                                await fse.copy(sourcePath, destPath);
+                                                await VTFfromVMT(gamepath, sourcePath, outputDir);
+                                          } catch (error) {
+                                                handleError(error);
+                                          }
+                                    });
+                              }
+                        }
+                  }
             });
       }
 

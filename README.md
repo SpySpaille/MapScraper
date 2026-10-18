@@ -1,41 +1,81 @@
+# MapScraper
 
-# Map Scraper
+MapScraper is a high-performance Source Engine utility that extracts a map's referenced content (textures, materials, 3D models, soundscapes, audio files, particle systems, instances, and navigation files) directly into an organized, publish-ready folder.
 
-MapScraper is a Source Engine script that extracts a map's content, such as models, textures, sounds, scripts, etc.
-
-
-## Installation
 [![Latest Release](https://img.shields.io/github/downloads/SpySpaille/MapScraper/total)](https://github.com/SpySpaille/MapScraper/releases/latest)
+[![Version](https://img.shields.io/badge/version-1.8-brightgreen.svg)](https://github.com/SpySpaille/MapScraper/releases/latest)
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
 
-- Download the latest release **[here](https://github.com/SpySpaille/MapScraper/releases/latest)**
-- Place the executable in a **dedicated** folder
-- Execute the executable file
-
-## Usage/Examples
-
-Simple exemple:
-```console
-$ - 📂 Game Path > C:\Steam\steamapps\common\GarrysMod\garrysmod
-$ - 🗒️ VMF File > C:\Steam\steamapps\common\GarrysMod\garrysmod\maps\gm_construct.vmf
-$ - 🧱 Extract Materials (y/n) > y
-$ - 📐 Extract Models (y/n) > n
-$ - 🔊 Extract Sounds (y/n) > y
-```
-Output:
-```console
-$ - ✅ 33 materials have been extracted to the output folder
-$ - ✅ 12 sounds have been extracted to the output folder
-```
-All extracted content will be in the folder named "output", make sure you have placed the executable in a dedicated folder to see the output folder.
+---
 
 ## Features
 
-- Extract materials and textures from VMF file.
-- Extract 3D Models files and materials from VMF file.
-- Extract sounds files from VMF file.
+- **🧱 Material & Texture Extraction**: Recursively parses `.vmt` files (including `Patch`, `$include`, `$bottommaterial`, and Proxies) to copy referenced `.vtf` and `.hdr.vtf` textures.
+- **📐 3D Model Extraction**: Parses `.mdl` files via `source-mdl`, copies all model variants (`.vvd`, `.phy`, `.dx90.vtx`, `.dx80.vtx`, `.sw.vtx`, `.ani`), and extracts all textures mapped onto the model.
+- **🔊 Sound Extraction**: Extracts ambient and entity audio, parses `soundscapes_<mapname>.txt`, and automatically cleans Source Engine sound flags (`)`, `*`, `^`, `#`, `~`, `>`).
+- **🔄 Func_instance Support**: Resolves and recursively analyzes sub-VMF instance entities, extracting all nested assets and copying instance files for publishing.
+- **🔗 Mounted Directories Support**: Automatically detects mounted games from `cfg/mount.cfg` and `gameinfo.txt` (e.g. Counter-Strike: Source, Team Fortress 2, Half-Life 2), and seamlessly collects assets from all mounted folders into your map's output.
+- **📤 Ready to Publish & Packing**: Gathers auxiliary map files (`.ain`, `.nav`, `.png`, `_particles.txt`, `.pcf`), instance VMFs, and automatically packs them into the BSP using `bspzip.exe` when available.
+- **⚡ Offline-First & Optimized**: Uses local bundled asset getters with optional online updates, concurrent async file copying, and duplicate-safe caching.
 
+---
+
+## Installation
+
+- Download the latest standalone executable from **[GitHub Releases](https://github.com/SpySpaille/MapScraper/releases/latest)**.
+- Place `MapScraper.exe` in a dedicated working folder.
+- Run `MapScraper.exe`.
+
+---
+
+## Usage
+
+```console
+$ - 📂 Game Path > C:\Steam\steamapps\common\GarrysMod\garrysmod
+$ - 📄 VMF File > C:\Steam\steamapps\common\GarrysMod\garrysmod\maps\rp_downtown_v4c.vmf
+$ - 🧱 Extract Materials [y/n] > y
+$ - 📐 Extract Models [y/n] > y
+$ - 🔊 Extract Sounds [y/n] > y
+$ - 📤 Ready to Publish (all other contents & pack) [y/n] > y
+```
+
+Output:
+```console
+📂 Game Path: C:\Steam\steamapps\common\GarrysMod\garrysmod
+🔗 Mounted directories detected (2):
+   - mount.cfg (cstrike): C:\Steam\steamapps\common\Counter-Strike Source\cstrike
+   - mount.cfg (tf): C:\Steam\steamapps\common\Team Fortress 2\tf
+
+🔄 • ✅ 4 func_instance VMFs processed
+🔊 • ✅ 28 sounds extracted
+🧱 • ✅ 142 materials & 180 textures extracted
+📐 • ✅ 65 models extracted
+📤 • ✅ 6 additional files extracted
+
+Extraction completed 🎉
+📁 Output directory: D:\Développement\MapScraper\rp_downtown_v4c
+```
+
+---
+
+## Development & Building
+
+```bash
+# Install dependencies
+npm install
+
+# Run automated tests
+npm test
+
+# Run CLI directly
+npm start
+
+# Build standalone executable with pkg
+npm run build
+```
+
+---
 
 ## Author
 
-- [@SpySpaille](https://github.com/SpySpaille)
-
+- **SpySpaille** ([@SpySpaille](https://github.com/SpySpaille))

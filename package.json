@@ -1,13 +1,17 @@
 {
   "name": "mapscraper",
-  "version": "1.7",
-  "description": "",
+  "version": "1.8",
+  "description": "Source Engine content scraper for VMF maps",
   "main": "main.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node test/test_parsers.js",
+    "build": "pkg . --targets node18-win-x64 -C Brotli --output dist/MapScraper.exe"
+  },
   "author": "SpySpaille",
   "license": "ISC",
   "dependencies": {
     "@colors/colors": "^1.5.0",
-    "express": "^4.18.2",
     "figlet": "^1.5.2",
     "fs-extra": "^11.1.0",
     "node-fetch": "^2.6.1",
@@ -16,9 +20,15 @@
   },
   "bin": "./main.js",
   "pkg": {
-    "scripts": [],
+    "scripts": [
+      "src/**/*.js"
+    ],
     "assets": [
-      "node_modules/figlet/fonts/Standard.flf"
+      "node_modules/figlet/fonts/Standard.flf",
+      "Getters/*.txt"
     ]
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
   }
 }

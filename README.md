@@ -60,18 +60,17 @@ Extraction completed 🎉
 
 ## Development & Building
 
+Written in **Rust** for maximum execution speed, zero external runtime dependency, and an ultra-compact executable size (~1.4 MB).
+
 ```bash
-# Install dependencies
-npm install
-
 # Run automated tests
-npm test
+cargo test
 
-# Run CLI directly
-npm start
+# Run directly
+cargo run
 
-# Build standalone executable with pkg
-npm run build
+# Build standalone release executable
+cargo build --release
 ```
 
 ---

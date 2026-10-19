@@ -4,6 +4,14 @@ All notable changes to **MapScraper** will be documented in this file.
 
 ## [1.8.0] - 2026-10-19
 
+### ⚡ Complete Rust Rewrite & Ultra-Lightweight Binary
+- **Ground-up rewrite in Rust**:
+  - Replaced the legacy Node.js/pkg bundle (~39 MB) with a blazing-fast, compiled native Windows binary.
+  - Executable size reduced from **38.6 MB down to 472 KB** (an **~99% size reduction**).
+  - Instant startup with zero V8 engine overhead, zero OpenSSL bloat (using Windows native Schannel), and zero runtime dependencies.
+- **Embedded Custom Icon**:
+  - Custom favicon/app icon directly compiled and embedded into PE executable resources (`.rsrc`) via `winresource`.
+
 ### 🚀 Added
 - **`func_instance` Support**:
   - Full recursive parsing of Source Engine `func_instance` sub-VMF files.
@@ -14,28 +22,18 @@ All notable changes to **MapScraper** will be documented in this file.
   - Automatic discovery of mounted games from `cfg/mount.cfg` (Garry's Mod mounts like Counter-Strike: Source, Team Fortress 2, etc.).
   - Automatic discovery of `SearchPaths` from `gameinfo.txt`.
   - Seamless asset resolution across all mounted directories, copying external assets into the map's single distribution package.
+- **Native StudioMDL Binary Parser**:
+  - Implemented exact Valve StudioMDL binary header parsing (`IDST`, textures offset 204, texture dirs offset 212) directly in Rust.
 - **Source Engine Sound Flag Handling**:
   - Automatic sanitization of sound script flags (`)`, `*`, `^`, `#`, `~`, `>`) to locate audio files reliably on disk.
-- **Offline-First Getters Fallback**:
-  - Bundled local `Getters/` files are used immediately, with non-blocking remote updates if connected.
-- **Automated Test Suite**:
-  - Comprehensive unit and integration test suite (`npm test`) covering VMT parsing, VMF parsing, mounts, sound flag cleanup, and instance resolution.
+- **Offline-First Bundled Getters**:
+  - Embedded local asset getters compiled directly into the binary with zero network delay.
+- **Automated Native Test Suite**:
+  - Comprehensive unit and integration test suite (`cargo test`) covering real MDL binary parsing, VMT parsing, VMF parsing, mounts, sound flag cleanup, and recursive instance resolution.
 
-### 🔄 Changed & Refactored
-- **Modular Codebase**:
-  - Refactored monolithic `main.js` into structured ES/CommonJS modules under `src/`:
-    - `src/cli/` (UI, ASCII banner, prompts)
-    - `src/core/` (configuration, search path manager, scraper pipeline)
-    - `src/parsers/` (robust VMF and VMT KeyValues parsers, instance resolver)
-    - `src/extractors/` (materials, 3D models, sounds, publish files)
-    - `src/utils/` (filesystem helpers, getters loader, concurrency pool)
-- **Dependency Cleanup**:
-  - Completely removed unnecessary `express` dependency and phantom HTTP server on port 3000.
-  - Reduced dependencies and vulnerabilities.
-- **Performance & Reliability**:
-  - Added async concurrency limiter (`pLimit`) for batching file copies without exhausting file descriptors.
-  - Set-based deduplication caches for materials, textures, models, and sounds.
-  - Robust exception handling for unusual or corrupted MDL headers.
+### 🧹 Removed & Cleaned
+- Removed Node.js, `npm`, `package.json`, `node_modules`, and the legacy monolithic `main.js`.
+- Removed phantom web server dependencies (`express`).
 
 ---
 

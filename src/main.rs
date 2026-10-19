@@ -106,15 +106,19 @@ fn main() {
     let mut game_path: Option<PathBuf> = None;
 
     if let Some(ref saved) = cfg.gamepath {
-        let p = PathBuf::from(saved);
-        if p.join("materials").exists() || p.join("gameinfo.txt").exists() {
-            let reuse = prompt_yn(&format!("💾 Use last Game Path ? ({})", saved.cyan()));
-            if reuse {
+        let reuse = prompt_yn(&format!("💾 Use last Game Path ? ({})", saved.cyan()));
+        if reuse {
+            let p = PathBuf::from(saved);
+            if p.join("materials").exists() || p.join("gameinfo.txt").exists() {
                 game_path = Some(p);
             } else {
+                println!("{}", "Saved game path is no longer valid (missing materials/ or gameinfo.txt)".red());
                 clear_config();
                 cfg.gamepath = None;
             }
+        } else {
+            clear_config();
+            cfg.gamepath = None;
         }
     }
 

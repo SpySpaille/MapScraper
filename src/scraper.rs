@@ -232,6 +232,12 @@ pub fn run_scraper(options: ScraperOptions) -> std::io::Result<ScraperStats> {
                     let _ = safe_copy_file(&res_vtf, &dest_vtf);
                     stats.textures_count += 1;
                 }
+
+                let rel_hdr = format!("materials/{}.hdr.vtf", norm_tex);
+                if let Some(res_hdr) = search_paths.resolve(&rel_hdr) {
+                    let dest_hdr = output_dir.join(&rel_hdr);
+                    let _ = safe_copy_file(&res_hdr, &dest_hdr);
+                }
             }
         }
 

@@ -344,4 +344,23 @@ fn test_bsp_pakfile_and_wvt_patch_resolution() {
     );
 }
 
+#[test]
+fn test_detail_vbsp_parsing_and_resolution() {
+    let vmf = r#"
+        world {
+            "classname" "worldspawn"
+            "detailmaterial" "detail/detailsprites"
+            "detailvbsp" "detail_custom_foliage.vbsp"
+            "skyname" "sky_dust"
+        }
+    "#;
+    let sound_getters = HashSet::new();
+    let assets = parse_vmf(vmf, &sound_getters);
+
+    assert!(
+        assets.detail_vbsps.contains("detail_custom_foliage.vbsp"),
+        "VMF parser must extract detailvbsp key from worldspawn"
+    );
+}
+
 

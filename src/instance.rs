@@ -80,6 +80,7 @@ impl<'a> InstanceResolver<'a> {
                 merged.models.extend(parsed.models);
                 merged.sounds.extend(parsed.sounds);
                 merged.direct_vtfs.extend(parsed.direct_vtfs);
+                merged.detail_vbsps.extend(parsed.detail_vbsps);
                 if parsed.has_soundscapes {
                     merged.has_soundscapes = true;
                 }

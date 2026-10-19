@@ -21,6 +21,10 @@ All notable changes to **MapScraper** will be documented in this file.
   - Confirmed and enforced that "Ready to Publish" packfile only injects auxiliary companion files (`.nav`, `.ain`, thumbnail, soundscapes, `_particles.txt`) and never dumps loose models/materials/sounds into the BSP pakfile when packaging for addon distribution.
 
 ### 🚀 Added
+- **VMF Detail VBSP (`detailvbsp`) Support & Foliage Model Extraction**:
+  - Automatically parses `"detailvbsp`" properties in `worldspawn` (and sub-instances).
+  - Copies the custom `.vbsp` detail definition file directly into the output root during `"Ready to Publish`".
+  - Recursively inspects the `.vbsp` file for referenced foliage models (`.mdl`) and triggers full model, material, and texture scraping when model extraction is enabled.
 - **Native BSP Pakfile Asset Provider (`Lump 40`)**:
   - Automatically mounts the map's `.bsp` pakfile archive directly as an asset provider, allowing seamless extraction of packed materials, textures, and cubemaps.
 - **Unified Virtual File System (VFS)**:

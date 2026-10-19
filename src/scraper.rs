@@ -182,6 +182,7 @@ pub fn run_scraper(options: ScraperOptions) -> std::io::Result<ScraperStats> {
         root_assets.models.extend(inst_assets.models);
         root_assets.sounds.extend(inst_assets.sounds);
         root_assets.direct_vtfs.extend(inst_assets.direct_vtfs);
+        root_assets.detail_vbsps.extend(inst_assets.detail_vbsps);
         if inst_assets.has_soundscapes {
             root_assets.has_soundscapes = true;
         }
@@ -192,8 +193,10 @@ pub fn run_scraper(options: ScraperOptions) -> std::io::Result<ScraperStats> {
         );
     }
 
+    // Move extract_model below extract_material so it can call extract_material
     let mut processed_materials: HashSet<String> = HashSet::new();
     let mut processed_textures: HashSet<String> = HashSet::new();
+    let mut processed_models: HashSet<String> = HashSet::new();
 
     let extract_material = |mat_name: &str,
                             pm: &mut HashSet<String>,
@@ -377,6 +380,66 @@ pub fn run_scraper(options: ScraperOptions) -> std::io::Result<ScraperStats> {
                         0,
                         "Material VMT not found in search paths",
                     );
+                }
+            }
+        }
+    };
+
+    let extract_model = |mdl_name: &str,
+                         pm: &mut HashSet<String>,
+                         pt: &mut HashSet<String>,
+                         pmodels: &mut HashSet<String>,
+                         manifest: &mut Manifest| {
+        let base_no_ext = if mdl_name.to_lowercase().ends_with(".mdl") {
+            &mdl_name[..mdl_name.len() - 4]
+        } else {
+            mdl_name
+        };
+
+        let norm_base = normalize_source_path(base_no_ext);
+        let base_lower = norm_base.to_lowercase();
+        if pmodels.contains(&base_lower) || base_lower.is_empty() {
+            return;
+        }
+        pmodels.insert(base_lower.clone());
+
+        let mut found_mdl = false;
+
+        for variant in MODEL_VARIANTS {
+            let rel_var = format!("{}{}", norm_base, variant);
+            if let Ok(virt_mdl) = VirtualAssetPath::parse(&rel_var) {
+                if let Some(resolved) = search_paths.resolve_asset(&rel_var) {
+                    let dest = output_dir.join(&rel_var);
+                    if let Ok(bytes) = search_paths.extract_asset(&resolved, &dest) {
+                        manifest.record(
+                            virt_mdl,
+                            AssetKind::Model,
+                            resolved.loose_path().map(|p| p.to_path_buf()),
+                            Some(dest),
+                            AssetStatus::Extracted,
+                            bytes,
+                            resolved.label(),
+                        );
+                        if variant == ".mdl" {
+                            found_mdl = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        if found_mdl {
+            let rel_mdl = format!("{}.mdl", norm_base);
+            if let Some(resolved_mdl) = search_paths.resolve_asset(&rel_mdl) {
+                if let Ok(mdl_bytes) = search_paths.read_asset(&resolved_mdl) {
+                    if let Some(mdl_info) = parse_mdl_textures(&mdl_bytes) {
+                        for dir in &mdl_info.texture_dirs {
+                            for tex in &mdl_info.textures {
+                                let sub_mat = format!("{}/{}", dir.trim_end_matches('/'), tex);
+                                extract_material(&sub_mat, pm, pt, manifest);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -571,57 +634,13 @@ pub fn run_scraper(options: ScraperOptions) -> std::io::Result<ScraperStats> {
     if options.extract_models {
         let mut spin = Spinner::start("Extracting 3D models...");
         for mdl in &root_assets.models {
-            let base_no_ext = if mdl.to_lowercase().ends_with(".mdl") {
-                &mdl[..mdl.len() - 4]
-            } else {
-                mdl.as_str()
-            };
-
-            let mut found_mdl = false;
-
-            for variant in MODEL_VARIANTS {
-                let rel_var = format!("{}{}", base_no_ext, variant);
-                if let Ok(virt_mdl) = VirtualAssetPath::parse(&rel_var) {
-                    if let Some(resolved) = search_paths.resolve_asset(&rel_var) {
-                        let dest = output_dir.join(&rel_var);
-                        if let Ok(bytes) = search_paths.extract_asset(&resolved, &dest) {
-                            manifest.record(
-                                virt_mdl,
-                                AssetKind::Model,
-                                resolved.loose_path().map(|p| p.to_path_buf()),
-                                Some(dest),
-                                AssetStatus::Extracted,
-                                bytes,
-                                resolved.label(),
-                            );
-                            if variant == ".mdl" {
-                                found_mdl = true;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if found_mdl {
-                let rel_mdl = format!("{}.mdl", base_no_ext);
-                if let Some(resolved_mdl) = search_paths.resolve_asset(&rel_mdl) {
-                    if let Ok(mdl_bytes) = search_paths.read_asset(&resolved_mdl) {
-                        if let Some(mdl_info) = parse_mdl_textures(&mdl_bytes) {
-                            for dir in &mdl_info.texture_dirs {
-                                for tex in &mdl_info.textures {
-                                    let sub_mat = format!("{}/{}", dir.trim_end_matches('/'), tex);
-                                    extract_material(
-                                        &sub_mat,
-                                        &mut processed_materials,
-                                        &mut processed_textures,
-                                        &mut manifest,
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            extract_model(
+                mdl,
+                &mut processed_materials,
+                &mut processed_textures,
+                &mut processed_models,
+                &mut manifest,
+            );
         }
         spin.stop();
         let summary = manifest.summary();
@@ -739,6 +758,55 @@ pub fn run_scraper(options: ScraperOptions) -> std::io::Result<ScraperStats> {
                     bytes,
                     "Source VMF file",
                 );
+            }
+        }
+
+        // Copy detail VBSP files and extract referenced models
+        let vbsp_mdl_re = regex::Regex::new(r#"(?i)"model"\s+"([^"]+\.mdl)""#).unwrap();
+        for vbsp_name in &root_assets.detail_vbsps {
+            let rel_vbsp = normalize_source_path(vbsp_name);
+            if let Ok(virt_vbsp) = VirtualAssetPath::parse(&rel_vbsp) {
+                if let Some(res_vbsp) = search_paths.resolve_asset(&rel_vbsp) {
+                    let dest_vbsp = output_dir.join(&rel_vbsp);
+                    if let Ok(bytes) = search_paths.extract_asset(&res_vbsp, &dest_vbsp) {
+                        manifest.record(
+                            virt_vbsp,
+                            AssetKind::Other,
+                            res_vbsp.loose_path().map(|p| p.to_path_buf()),
+                            Some(dest_vbsp),
+                            AssetStatus::Extracted,
+                            bytes,
+                            "Detail VBSP file",
+                        );
+                    }
+
+                    // Parse the .vbsp content to extract any foliage models referenced inside
+                    if let Ok(vbsp_bytes) = search_paths.read_asset(&res_vbsp) {
+                        let text = String::from_utf8_lossy(&vbsp_bytes);
+                        for cap in vbsp_mdl_re.captures_iter(&text) {
+                            let mdl_ref = normalize_source_path(&cap[1]);
+                            if options.extract_models {
+                                extract_model(
+                                    &mdl_ref,
+                                    &mut processed_materials,
+                                    &mut processed_textures,
+                                    &mut processed_models,
+                                    &mut manifest,
+                                );
+                            }
+                        }
+                    }
+                } else {
+                    manifest.record(
+                        virt_vbsp,
+                        AssetKind::Other,
+                        None,
+                        None,
+                        AssetStatus::Missing,
+                        0,
+                        "Detail VBSP file not found in search paths",
+                    );
+                }
             }
         }
 

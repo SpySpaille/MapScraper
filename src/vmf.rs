@@ -9,6 +9,7 @@ pub struct VmfAssets {
     pub sounds: HashSet<String>,
     pub direct_vtfs: HashSet<String>,
     pub instances: HashSet<String>,
+    pub detail_vbsps: HashSet<String>,
     pub has_soundscapes: bool,
 }
 
@@ -135,6 +136,18 @@ fn handle_kv_pair(key: &str, val: &str, assets: &mut VmfAssets, sound_getters: &
         return;
     }
 
+    // 3b. Detail VBSP (detailvbsp)
+    if key == "detailvbsp" {
+        let mut vbsp = normalize_source_path(val);
+        if !vbsp.is_empty() {
+            if !vbsp.to_lowercase().ends_with(".vbsp") {
+                vbsp.push_str(".vbsp");
+            }
+            assets.detail_vbsps.insert(vbsp);
+        }
+        return;
+    }
+
     // 4. Models
     if key == "model" {
         let mdl = normalize_source_path(val);
@@ -214,6 +227,17 @@ fn fallback_regex_parse(
             assets.models.insert(mdl);
         }
     }
+
+    let vbsp_re = regex::Regex::new(r#"(?i)"detailvbsp"\s*"([^"]+)""#).unwrap();
+    for cap in vbsp_re.captures_iter(vmf_content) {
+        let mut vbsp = normalize_source_path(&cap[1]);
+        if !vbsp.is_empty() {
+            if !vbsp.to_lowercase().ends_with(".vbsp") {
+                vbsp.push_str(".vbsp");
+            }
+            assets.detail_vbsps.insert(vbsp);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -225,6 +249,7 @@ mod tests {
         let vmf = r#"
             world {
                 "skyname" "sky_dust"
+                "detailvbsp" "detail_custom.vbsp"
                 solid {
                     side {
                         "material" "BRICK/WALL01"
@@ -253,5 +278,6 @@ mod tests {
         assert!(assets.models.contains("models/props/chair.mdl"));
         assert!(assets.sounds.contains("ambient/wind.wav"));
         assert!(assets.instances.contains("instances/door.vmf"));
+        assert!(assets.detail_vbsps.contains("detail_custom.vbsp"));
     }
 }

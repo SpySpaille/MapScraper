@@ -16,7 +16,11 @@ impl Getters {
             raw.lines()
                 .map(|l| l.trim().to_lowercase())
                 .filter(|l| !l.is_empty() && !l.starts_with("//"))
-                .map(|l| l.trim_start_matches('$').trim_start_matches('%').to_string())
+                .map(|l| {
+                    l.trim_start_matches('$')
+                        .trim_start_matches('%')
+                        .to_string()
+                })
                 .collect()
         };
 

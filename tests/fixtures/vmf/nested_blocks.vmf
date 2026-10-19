@@ -1,0 +1,53 @@
+versioninfo
+{
+	"editorversion" "400"
+	"editorbuild" "8864"
+	"mapversion" "1"
+	"formatversion" "100"
+	"prefab" "0"
+}
+viewsettings
+{
+	"bShowGrid" "1"
+	"nGridSpacing" "64"
+	"bShowLogicalGrid" "0"
+	"nLogicalGridSpacing" "64"
+	"bShow3DGrid" "0"
+}
+world
+{
+	"id" "1"
+	"mapversion" "1"
+	"classname" "worldspawn"
+	"skyname" "sky_day01_01"
+	"solid"
+	{
+		"id" "2"
+		"side"
+		{
+			"id" "1"
+			"plane" "(-128 128 0) (128 128 0) (128 -128 0)"
+			"material" "DEV/DEV_MEASUREWALL01A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+			"rotation" "0"
+			"lightmapscale" "16"
+			"smoothing_groups" "0"
+		}
+	}
+}
+entity
+{
+	"id" "3"
+	"classname" "func_instance"
+	"editor"
+	{
+		"color" "220 30 220"
+		"visgroupshown" "1"
+		"visgroupautoshown" "1"
+		"logicalpos" "[0 0]"
+	}
+	"file" "instances/test_sub.vmf"
+	"targetname" "instance_nested_01"
+	"origin" "0 0 0"
+}

@@ -1,7 +1,8 @@
-use std::collections::HashSet;
+use crate::keyvalues::{parse_keyvalues, KVValue};
 use crate::utils::{clean_sound_path, normalize_source_path};
+use std::collections::HashSet;
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct VmfAssets {
     pub materials: HashSet<String>,
     pub models: HashSet<String>,
@@ -14,7 +15,163 @@ pub struct VmfAssets {
 pub fn parse_vmf(vmf_content: &str, sound_getters: &HashSet<String>) -> VmfAssets {
     let mut assets = VmfAssets::default();
 
+    if let Ok(doc) = parse_keyvalues(vmf_content) {
+        for (root_key, root_val) in &doc.root_entries {
+            traverse_vmf_block(root_key, root_val, &mut assets, sound_getters);
+        }
+    } else {
+        // Fallback regex parser for non-standard/partially corrupt files
+        fallback_regex_parse(vmf_content, &mut assets, sound_getters);
+    }
+
+    if vmf_content.to_lowercase().contains("soundscape") {
+        assets.has_soundscapes = true;
+    }
+
+    assets
+}
+
+fn traverse_vmf_block(
+    block_name: &str,
+    val: &KVValue,
+    assets: &mut VmfAssets,
+    sound_getters: &HashSet<String>,
+) {
+    if let KVValue::Block(entries) = val {
+        let is_entity = block_name.to_lowercase() == "entity";
+        let mut classname = String::new();
+
+        if is_entity {
+            for (k, v) in entries {
+                if k.to_lowercase() == "classname" {
+                    if let KVValue::String(s) = v {
+                        classname = s.to_lowercase();
+                    }
+                }
+            }
+        }
+
+        // If func_instance entity, extract "file" or "vmf"
+        if is_entity && classname == "func_instance" {
+            for (k, v) in entries {
+                let k_lower = k.to_lowercase();
+                if k_lower == "file" || k_lower == "vmf" {
+                    if let KVValue::String(s) = v {
+                        let mut inst_file = normalize_source_path(s);
+                        if !inst_file.to_lowercase().ends_with(".vmf") {
+                            inst_file.push_str(".vmf");
+                        }
+                        if !inst_file.is_empty() {
+                            assets.instances.insert(inst_file);
+                        }
+                    }
+                }
+            }
+        }
+
+        for (k, v) in entries {
+            let k_lower = k.to_lowercase();
+            match v {
+                KVValue::String(s) => {
+                    handle_kv_pair(&k_lower, s, assets, sound_getters);
+                }
+                KVValue::Block(_) => {
+                    traverse_vmf_block(k, v, assets, sound_getters);
+                }
+            }
+        }
+    }
+}
+
+fn handle_kv_pair(key: &str, val: &str, assets: &mut VmfAssets, sound_getters: &HashSet<String>) {
+    if val.trim().is_empty() {
+        return;
+    }
+
     // 1. Skybox
+    if key == "skyname" {
+        let sky = val.trim();
+        if !sky.is_empty() {
+            assets.materials.insert(format!("skybox/{}up", sky));
+            assets.materials.insert(format!("skybox/{}dn", sky));
+            assets.materials.insert(format!("skybox/{}lf", sky));
+            assets.materials.insert(format!("skybox/{}rt", sky));
+            assets.materials.insert(format!("skybox/{}ft", sky));
+            assets.materials.insert(format!("skybox/{}bk", sky));
+        }
+        return;
+    }
+
+    // 2. Materials
+    let mat_keys = [
+        "material",
+        "texture",
+        "detailmaterial",
+        "overlayname",
+        "bottommaterial",
+        "topmaterial",
+    ];
+    if mat_keys.contains(&key) {
+        let mut mat = normalize_source_path(val);
+        let lower = mat.to_lowercase();
+        if !lower.starts_with("tools/") && !lower.is_empty() {
+            if lower.ends_with(".vmt") {
+                mat = mat[..mat.len() - 4].to_string();
+            }
+            assets.materials.insert(mat);
+        }
+        return;
+    }
+
+    // 3. Direct VTF (startexture)
+    if key == "startexture" {
+        let mut vtf = normalize_source_path(val);
+        if vtf.to_lowercase().ends_with(".vtf") {
+            vtf = vtf[..vtf.len() - 4].to_string();
+        }
+        if !vtf.is_empty() {
+            assets.direct_vtfs.insert(vtf);
+        }
+        return;
+    }
+
+    // 4. Models
+    if key == "model" {
+        let mdl = normalize_source_path(val);
+        if mdl.to_lowercase().ends_with(".mdl") {
+            assets.models.insert(mdl);
+        }
+        return;
+    }
+
+    // 5. Sounds
+    let sound_keys = [
+        "message",
+        "noise1",
+        "noise2",
+        "closesound",
+        "startclosesound",
+        "shootsound",
+    ];
+    if sound_keys.contains(&key) || sound_getters.contains(key) {
+        let clean = clean_sound_path(val);
+        let lower = clean.to_lowercase();
+        // Support files with extensions (.wav, .mp3, .ogg) and soundscript event names (like Weapon_AR2.Single)
+        let is_audio_file =
+            lower.ends_with(".wav") || lower.ends_with(".mp3") || lower.ends_with(".ogg");
+        let is_soundscript_name =
+            !clean.contains('/') && !clean.contains('\\') && !clean.contains(' ');
+        if (is_audio_file || is_soundscript_name) && !clean.is_empty() {
+            assets.sounds.insert(clean);
+        }
+    }
+}
+
+fn fallback_regex_parse(
+    vmf_content: &str,
+    assets: &mut VmfAssets,
+    _sound_getters: &HashSet<String>,
+) {
     let sky_re = regex::Regex::new(r#"(?i)"skyname"\s*"([^"]+)""#).unwrap();
     for cap in sky_re.captures_iter(vmf_content) {
         let sky = cap[1].trim();
@@ -28,14 +185,20 @@ pub fn parse_vmf(vmf_content: &str, sound_getters: &HashSet<String>) -> VmfAsset
         }
     }
 
-    // 2. Brush and entity materials
-    let mat_keys = ["material", "texture", "detailmaterial", "overlayname", "bottommaterial"];
+    let mat_keys = [
+        "material",
+        "texture",
+        "detailmaterial",
+        "overlayname",
+        "bottommaterial",
+        "topmaterial",
+    ];
     for key in mat_keys {
         let re = regex::Regex::new(&format!(r#"(?i)"{}"\s*"([^"]+)""#, key)).unwrap();
         for cap in re.captures_iter(vmf_content) {
             let mut mat = normalize_source_path(&cap[1]);
             let lower = mat.to_lowercase();
-            if !lower.starts_with("tools/") && !lower.starts_with("maps/") && !lower.is_empty() {
+            if !lower.starts_with("tools/") && !lower.is_empty() {
                 if lower.ends_with(".vmt") {
                     mat = mat[..mat.len() - 4].to_string();
                 }
@@ -44,19 +207,6 @@ pub fn parse_vmf(vmf_content: &str, sound_getters: &HashSet<String>) -> VmfAsset
         }
     }
 
-    // 3. Direct VTF (e.g. startexture)
-    let star_re = regex::Regex::new(r#"(?i)"startexture"\s*"([^"]+)""#).unwrap();
-    for cap in star_re.captures_iter(vmf_content) {
-        let mut vtf = normalize_source_path(&cap[1]);
-        if vtf.to_lowercase().ends_with(".vtf") {
-            vtf = vtf[..vtf.len() - 4].to_string();
-        }
-        if !vtf.is_empty() {
-            assets.direct_vtfs.insert(vtf);
-        }
-    }
-
-    // 4. Models
     let mdl_re = regex::Regex::new(r#"(?i)"model"\s*"([^"]+)""#).unwrap();
     for cap in mdl_re.captures_iter(vmf_content) {
         let mdl = normalize_source_path(&cap[1]);
@@ -64,53 +214,6 @@ pub fn parse_vmf(vmf_content: &str, sound_getters: &HashSet<String>) -> VmfAsset
             assets.models.insert(mdl);
         }
     }
-
-    // 5. Sounds
-    let mut all_sound_keys: Vec<String> = vec![
-        "message".to_string(),
-        "noise1".to_string(),
-        "noise2".to_string(),
-        "closesound".to_string(),
-        "startclosesound".to_string(),
-        "shootsound".to_string(),
-    ];
-    for sg in sound_getters {
-        if !all_sound_keys.contains(sg) {
-            all_sound_keys.push(sg.clone());
-        }
-    }
-
-    for key in all_sound_keys {
-        let re = regex::Regex::new(&format!(r#"(?i)"{}"\s*"([^"]+)""#, key)).unwrap();
-        for cap in re.captures_iter(vmf_content) {
-            let clean = clean_sound_path(&cap[1]);
-            let lower = clean.to_lowercase();
-            if lower.ends_with(".wav") || lower.ends_with(".mp3") || lower.ends_with(".ogg") {
-                assets.sounds.insert(clean);
-            }
-        }
-    }
-
-    // 6. Func_instance extraction
-    let entity_re = regex::Regex::new(r"(?is)entity\s*\{([^}]+)\}").unwrap();
-    for cap in entity_re.captures_iter(vmf_content) {
-        let block = &cap[1];
-        if block.to_lowercase().contains("\"classname\" \"func_instance\"")
-            || block.to_lowercase().contains("\"classname\"\t\"func_instance\"") {
-            let file_re = regex::Regex::new(r#"(?i)"(?:file|vmf)"\s*"([^"]+)""#).unwrap();
-            if let Some(fcap) = file_re.captures(block) {
-                let mut inst_file = normalize_source_path(&fcap[1]);
-                if !inst_file.to_lowercase().ends_with(".vmf") {
-                    inst_file.push_str(".vmf");
-                }
-                assets.instances.insert(inst_file);
-            }
-        }
-    }
-
-    assets.has_soundscapes = vmf_content.to_lowercase().contains("soundscape");
-
-    assets
 }
 
 #[cfg(test)]

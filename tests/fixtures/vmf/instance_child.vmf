@@ -1,0 +1,13 @@
+world
+{
+	"id" "1"
+	"classname" "worldspawn"
+}
+entity
+{
+	"id" "2"
+	"classname" "env_soundscape"
+	"soundscape" "street.outdoors"
+	"radius" "128"
+	"origin" "10 20 30"
+}

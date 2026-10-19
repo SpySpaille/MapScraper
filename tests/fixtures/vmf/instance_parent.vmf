@@ -1,0 +1,12 @@
+world
+{
+	"id" "1"
+	"classname" "worldspawn"
+}
+entity
+{
+	"id" "2"
+	"classname" "func_instance"
+	"file" "instance_child.vmf"
+	"targetname" "child_inst"
+}

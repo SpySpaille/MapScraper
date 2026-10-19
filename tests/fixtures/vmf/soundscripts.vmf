@@ -1,0 +1,21 @@
+world
+{
+	"id" "1"
+	"classname" "worldspawn"
+}
+entity
+{
+	"id" "2"
+	"classname" "ambient_generic"
+	"message" "Weapon_AR2.Single"
+	"health" "10"
+	"origin" "0 0 0"
+}
+entity
+{
+	"id" "3"
+	"classname" "ambient_generic"
+	"message" "doors/door_metal_large_open1.wav"
+	"health" "10"
+	"origin" "10 0 0"
+}

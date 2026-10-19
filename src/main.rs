@@ -1,21 +1,11 @@
-mod config;
-mod getters;
-mod instance;
-mod mdl;
-mod mounts;
-mod scraper;
-mod utils;
-mod vmf;
-mod vmt;
-
+use colored::Colorize;
+use mapscraper::config::{clear_config, load_config, save_config, Config};
+use mapscraper::scraper::{run_scraper, ScraperOptions};
+use mapscraper::utils::clean_quotes;
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
-use colored::Colorize;
-use config::{clear_config, load_config, save_config, Config};
-use scraper::{run_scraper, ScraperOptions};
-use utils::clean_quotes;
 
-const CURRENT_VERSION: &str = "1.8";
+const CURRENT_VERSION: &str = "1.8.1";
 const GITHUB_USER: &str = "SpySpaille";
 
 fn print_banner() {
@@ -28,7 +18,12 @@ fn print_banner() {
               |_|                       |_|              
 "#;
     println!("{}", ascii.green());
-    println!("{} {} {}", "Made by".white(), "SpySpaille".white().bold(), "with ❤️".red());
+    println!(
+        "{} {} {}",
+        "Made by".white(),
+        "SpySpaille".white().bold(),
+        "with ❤️".red()
+    );
 
     // Check version
     let latest = check_latest_version();
@@ -54,12 +49,19 @@ fn print_banner() {
 }
 
 fn check_latest_version() -> Option<String> {
-    let url = format!("https://api.github.com/repos/{}/MapScraper/releases/latest", GITHUB_USER);
+    let url = format!(
+        "https://api.github.com/repos/{}/MapScraper/releases/latest",
+        GITHUB_USER
+    );
     let agent = ureq::AgentBuilder::new()
         .timeout(std::time::Duration::from_secs(2))
         .build();
 
-    let res = agent.get(&url).set("User-Agent", "MapScraper-Rust").call().ok()?;
+    let res = agent
+        .get(&url)
+        .set("User-Agent", "MapScraper-Rust")
+        .call()
+        .ok()?;
     let json: serde_json::Value = serde_json::from_reader(res.into_reader()).ok()?;
     let tag = json.get("tag_name")?.as_str()?;
     Some(tag.trim_start_matches('v').to_string())
@@ -74,7 +76,11 @@ fn prompt(message: &str) -> String {
 }
 
 fn prompt_yn(message: &str) -> bool {
-    let prompt_msg = format!("{} {} ", message, "[\x1b[32my\x1b[37m/\x1b[31mn\x1b[37m] >".white());
+    let prompt_msg = format!(
+        "{} {} ",
+        message,
+        "[\x1b[32my\x1b[37m/\x1b[31mn\x1b[37m] >".white()
+    );
     loop {
         let resp = prompt(&prompt_msg).to_lowercase();
         if resp == "y" || resp == "yes" {
@@ -82,7 +88,25 @@ fn prompt_yn(message: &str) -> bool {
         } else if resp == "n" || resp == "no" {
             return false;
         }
-        println!("{}", "Invalid input (type 'y' or 'n')".red());
+        println!("  {}", "Invalid input (type 'y' or 'n')".red());
+    }
+}
+
+#[allow(dead_code)]
+fn prompt_yn_nested(message: &str) -> bool {
+    let prompt_msg = format!(
+        "  \x1b[90m└─\x1b[0m {} {} ",
+        message,
+        "[\x1b[32my\x1b[37m/\x1b[31mn\x1b[37m] >".white()
+    );
+    loop {
+        let resp = prompt(&prompt_msg).to_lowercase();
+        if resp == "y" || resp == "yes" {
+            return true;
+        } else if resp == "n" || resp == "no" {
+            return false;
+        }
+        println!("    {}", "Invalid input (type 'y' or 'n')".red());
     }
 }
 
@@ -98,6 +122,35 @@ fn main() {
         println!("MapScraper v{}", CURRENT_VERSION);
         return;
     }
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        mapscraper::cli::print_help();
+        return;
+    }
+
+    if let Ok(cli_args) = mapscraper::cli::parse_cli_args(&args) {
+        if cli_args.is_cli_mode {
+            match mapscraper::cli::to_scraper_options(cli_args) {
+                Ok(options) => match run_scraper(options) {
+                    Ok(_) => {
+                        println!(
+                            "\n{}",
+                            "Extraction completed successfully 🎉".green().bold()
+                        );
+                        std::process::exit(0);
+                    }
+                    Err(e) => {
+                        eprintln!("\n{} {}", "Error during extraction:".red().bold(), e);
+                        std::process::exit(1);
+                    }
+                },
+                Err(err) => {
+                    eprintln!("{} {}", "CLI Error:".red().bold(), err);
+                    mapscraper::cli::print_help();
+                    std::process::exit(1);
+                }
+            }
+        }
+    }
 
     print_banner();
     println!("📜 Please enter the following information:\n");
@@ -112,7 +165,10 @@ fn main() {
             if p.join("materials").exists() || p.join("gameinfo.txt").exists() {
                 game_path = Some(p);
             } else {
-                println!("{}", "Saved game path is no longer valid (missing materials/ or gameinfo.txt)".red());
+                println!(
+                    "  {}",
+                    "Saved game path is no longer valid (missing materials/ or gameinfo.txt)".red()
+                );
                 clear_config();
                 cfg.gamepath = None;
             }
@@ -124,7 +180,12 @@ fn main() {
 
     if game_path.is_none() {
         loop {
-            let input = prompt("📂 Game Path (e.g. C:\\Steam\\steamapps\\common\\GarrysMod\\garrysmod) > ");
+            let prompt_prefix = if cfg.gamepath.is_some() {
+                "  \x1b[90m└─\x1b[0m 📂 Game Path (e.g. C:\\Steam\\steamapps\\common\\GarrysMod\\garrysmod) > "
+            } else {
+                "📂 Game Path (e.g. C:\\Steam\\steamapps\\common\\GarrysMod\\garrysmod) > "
+            };
+            let input = prompt(prompt_prefix);
             let p = PathBuf::from(&input);
             if p.join("materials").exists() || p.join("gameinfo.txt").exists() {
                 save_config(&Config {
@@ -133,7 +194,10 @@ fn main() {
                 game_path = Some(p);
                 break;
             }
-            println!("{}", "Invalid game path: directory does not contain materials/ or gameinfo.txt".red());
+            println!(
+                "  {}",
+                "Invalid game path: directory does not contain materials/ or gameinfo.txt".red()
+            );
         }
     }
 
@@ -142,7 +206,10 @@ fn main() {
     let vmf_path: PathBuf = loop {
         let input = prompt("📄 VMF File (C:\\path\\to\\map.vmf) > ");
         let p = PathBuf::from(&input);
-        if p.exists() && p.extension().map_or(false, |ext| ext.eq_ignore_ascii_case("vmf")) {
+        if p.exists()
+            && p.extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("vmf"))
+        {
             break p;
         }
         println!("{}", "Invalid file: must be an existing .vmf file".red());

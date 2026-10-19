@@ -128,6 +128,8 @@ dist
 
 output/
 *.vmf
+!tests/fixtures/**
 MapScraper.exe
 target/
+
 

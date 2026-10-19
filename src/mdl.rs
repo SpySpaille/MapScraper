@@ -45,7 +45,8 @@ pub fn parse_mdl_textures(data: &[u8]) -> Option<MdlInfo> {
         if entry_pos + 4 > data.len() {
             break;
         }
-        let name_offset = i32::from_le_bytes(data[entry_pos..entry_pos + 4].try_into().ok()?) as isize;
+        let name_offset =
+            i32::from_le_bytes(data[entry_pos..entry_pos + 4].try_into().ok()?) as isize;
         let str_pos = (entry_pos as isize + name_offset) as usize;
         if let Some(tex) = read_null_terminated_string(data, str_pos) {
             textures.push(normalize_source_path(&tex).to_lowercase());
@@ -58,13 +59,18 @@ pub fn parse_mdl_textures(data: &[u8]) -> Option<MdlInfo> {
         if entry_pos + 4 > data.len() {
             break;
         }
-        let name_offset = i32::from_le_bytes(data[entry_pos..entry_pos + 4].try_into().ok()?) as usize;
+        let name_offset =
+            i32::from_le_bytes(data[entry_pos..entry_pos + 4].try_into().ok()?) as usize;
         // In Source Engine, cdtexture offsets in stringIndex can be direct file offsets
         if let Some(dir) = read_null_terminated_string(data, name_offset) {
-            let norm = normalize_source_path(&dir).trim_end_matches('/').to_lowercase();
+            let norm = normalize_source_path(&dir)
+                .trim_end_matches('/')
+                .to_lowercase();
             texture_dirs.push(norm);
         } else if let Some(dir) = read_null_terminated_string(data, entry_pos + name_offset) {
-            let norm = normalize_source_path(&dir).trim_end_matches('/').to_lowercase();
+            let norm = normalize_source_path(&dir)
+                .trim_end_matches('/')
+                .to_lowercase();
             texture_dirs.push(norm);
         }
     }

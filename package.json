@@ -1,6 +1,6 @@
 {
   "name": "map-scraper",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "description": "High-performance Source Engine content scraper for VMF maps",
   "repository": {
     "type": "git",

@@ -1,0 +1,15 @@
+"Patch"
+{
+	"include" "materials/models/props_c17/door01_base.vmt"
+	"insert"
+	{
+		"$detail" "detail/metal_detail_01"
+		"$detailscale" "4.283"
+		"$detailblendfactor" "0.65"
+		"$detailblendmode" "0"
+	}
+	"replace"
+	{
+		"$basetexture" "models/props_c17/door01_custom"
+	}
+}

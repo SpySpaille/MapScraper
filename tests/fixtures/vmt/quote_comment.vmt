@@ -1,0 +1,9 @@
+"VertexLitGeneric"
+{
+	"$basetexture" "models/props/crate01"
+	"$description" "Texture with // not a comment inside string"
+	"$bumpmap" "models/props/crate01_normal" // Real line comment
+	/* Multiline
+	   comment */
+	"$surfaceprop" "wood"
+}

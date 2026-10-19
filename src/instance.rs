@@ -1,9 +1,9 @@
-use std::collections::HashSet;
-use std::fs;
-use std::path::{Path, PathBuf};
 use crate::mounts::SearchPathManager;
 use crate::utils::normalize_source_path;
 use crate::vmf::{parse_vmf, VmfAssets};
+use std::collections::HashSet;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 pub struct InstanceFile {
     pub source_path: PathBuf,
@@ -41,13 +41,7 @@ impl<'a> InstanceResolver<'a> {
             candidates.push(sp.path.join(&clean));
         }
 
-        for cand in candidates {
-            if cand.exists() {
-                return Some(cand);
-            }
-        }
-
-        None
+        candidates.into_iter().find(|cand| cand.exists())
     }
 
     pub fn process_instances(
@@ -78,13 +72,17 @@ impl<'a> InstanceResolver<'a> {
                 relative_path: normalize_source_path(&rel_path),
             });
 
-            if let Ok(content) = fs::read_to_string(&resolved) {
+            if let Ok(bytes) = fs::read(&resolved) {
+                let content = String::from_utf8_lossy(&bytes);
                 let parsed = parse_vmf(&content, self.sound_getters);
 
                 merged.materials.extend(parsed.materials);
                 merged.models.extend(parsed.models);
                 merged.sounds.extend(parsed.sounds);
                 merged.direct_vtfs.extend(parsed.direct_vtfs);
+                if parsed.has_soundscapes {
+                    merged.has_soundscapes = true;
+                }
 
                 for child_inst in parsed.instances {
                     queue.push((child_inst, resolved.clone()));
@@ -124,7 +122,8 @@ mod tests {
                 "model" "models/inst1_model.mdl"
             }
             "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         // inst2 references inst1 (circular cycle test!)
         fs::write(
@@ -139,7 +138,8 @@ mod tests {
                 "model" "models/inst2_model.mdl"
             }
             "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         let root_vmf = game_dir.join("maps").join("root.vmf");
         fs::write(&root_vmf, "root").unwrap();
@@ -152,7 +152,11 @@ mod tests {
         initial.insert("instances/inst1.vmf".to_string());
 
         let (assets, files) = resolver.process_instances(&initial, &root_vmf);
-        assert_eq!(files.len(), 2, "Should resolve both instances without infinite loop");
+        assert_eq!(
+            files.len(),
+            2,
+            "Should resolve both instances without infinite loop"
+        );
         assert!(assets.models.contains("models/inst1_model.mdl"));
         assert!(assets.models.contains("models/inst2_model.mdl"));
 

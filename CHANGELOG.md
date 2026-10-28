@@ -5,6 +5,15 @@ All notable changes to **MapScraper** will be documented in this file.
 ## [1.8.1] - 2026-10-19
 
 ### 🐛 Fixed
+- **Detail VBSP Resolution & Foliage Model Pipeline**:
+  - Automatically parses detailvbsp properties in worldspawn and all sub-instances, registering detail models into the extraction set before model extraction runs.
+  - Automatically extracts .vbsp detail files to the destination root during Ready to Publish.
+- **Particle System Detection & Manifest Generation (_particles.txt)**:
+  - Automatically detects info_particle_system entities and effect_name definitions throughout the map and sub-instances.
+  - Searches mounted PCF files for matching effect definitions, extracts the corresponding .pcf archives and all referenced materials/textures.
+  - Generates or updates maps/<mapname>_particles.txt with all required particle entries for publishing.
+- **Enhanced Search Paths & Source Engine Directory VPK Mounting**:
+  - Automatically detects and mounts sourceengine/*_dir.vpk archives, game fallbacks, and standard directory VPKs referenced in gameinfo.txt SearchPaths.
 - **Source Engine Compiled Patch Materials & WVT Resolution (`_wvt_patch`)**:
   - Automatically resolves Source Engine compiled patch materials (`maps/<mapname>/..._wvt_patch.vmt`, cubemap materials `_<x>_<y>_<z>`, and water depth variations) to their master base materials and underlying textures (`$basetexture`, `$basetexture2`, `$bumpmap`, `$ssbump`, etc.).
   - Extracts both the compiled patch material and the original full-fidelity base materials and textures.

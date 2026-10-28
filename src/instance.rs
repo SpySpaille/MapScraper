@@ -81,6 +81,7 @@ impl<'a> InstanceResolver<'a> {
                 merged.sounds.extend(parsed.sounds);
                 merged.direct_vtfs.extend(parsed.direct_vtfs);
                 merged.detail_vbsps.extend(parsed.detail_vbsps);
+                merged.particle_effects.extend(parsed.particle_effects);
                 if parsed.has_soundscapes {
                     merged.has_soundscapes = true;
                 }

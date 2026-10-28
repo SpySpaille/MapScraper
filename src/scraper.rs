@@ -630,7 +630,21 @@ pub fn run_scraper(options: ScraperOptions) -> std::io::Result<ScraperStats> {
         );
     }
 
-    // 7. Extract Models
+    // 7. Resolve detail VBSP models & Extract 3D models
+    let vbsp_mdl_re = regex::Regex::new(r#"(?i)"model"\s+"([^"]+\.mdl)""#).unwrap();
+    for vbsp_name in &root_assets.detail_vbsps {
+        let rel_vbsp = normalize_source_path(vbsp_name);
+        if let Some(res_vbsp) = search_paths.resolve_asset(&rel_vbsp) {
+            if let Ok(vbsp_bytes) = search_paths.read_asset(&res_vbsp) {
+                let text = String::from_utf8_lossy(&vbsp_bytes);
+                for cap in vbsp_mdl_re.captures_iter(&text) {
+                    let mdl_ref = normalize_source_path(&cap[1]);
+                    root_assets.models.insert(mdl_ref);
+                }
+            }
+        }
+    }
+
     if options.extract_models {
         let mut spin = Spinner::start("Extracting 3D models...");
         for mdl in &root_assets.models {
@@ -683,44 +697,102 @@ pub fn run_scraper(options: ScraperOptions) -> std::io::Result<ScraperStats> {
             }
         }
 
-        // Particle files
+        // Particle discovery and maps/<mapname>_particles.txt generation/completion
+        let mut required_pcfs: Vec<String> = Vec::new();
         let particles_rel = format!("maps/{}_particles.txt", map_name);
+
+        // Read existing particle manifest if present
         if let Some(res_part) = search_paths.resolve_asset(&particles_rel) {
             if let Ok(part_bytes) = search_paths.read_asset(&res_part) {
                 let content = String::from_utf8_lossy(&part_bytes);
                 let pcf_re = regex::Regex::new(r#"(?i)"file"\s+"([^"]+)""#).unwrap();
-                let vmt_re = regex::Regex::new(r"[\w/\.-]+\.vmt").unwrap();
                 for cap in pcf_re.captures_iter(&content) {
-                    let rel_pcf = normalize_source_path(&cap[1]);
-                    if let Ok(virt_pcf) = VirtualAssetPath::parse(&rel_pcf) {
-                        if let Some(res_pcf) = search_paths.resolve_asset(&rel_pcf) {
-                            let dest_pcf = output_dir.join(&rel_pcf);
-                            if let Ok(bytes) = search_paths.extract_asset(&res_pcf, &dest_pcf) {
-                                manifest.record(
-                                    virt_pcf,
-                                    AssetKind::Particle,
-                                    res_pcf.loose_path().map(|p| p.to_path_buf()),
-                                    Some(dest_pcf),
-                                    AssetStatus::Extracted,
-                                    bytes,
-                                    res_pcf.label(),
-                                );
-                            }
+                    let clean_pcf = normalize_source_path(&cap[1]);
+                    if !required_pcfs.iter().any(|p| p.eq_ignore_ascii_case(&clean_pcf)) {
+                        required_pcfs.push(clean_pcf);
+                    }
+                }
+            }
+        }
 
-                            if let Ok(pcf_bytes) = search_paths.read_asset(&res_pcf) {
-                                let text = String::from_utf8_lossy(&pcf_bytes);
-                                for m in vmt_re.find_iter(&text) {
-                                    let vmt_ref = m.as_str().replace("materials/", "");
-                                    extract_material(
-                                        &vmt_ref,
-                                        &mut processed_materials,
-                                        &mut processed_textures,
-                                        &mut manifest,
-                                    );
-                                }
-                            }
+        // For all info_particle_system effect_name in VMF / instances, find matching PCF files
+        if !root_assets.particle_effects.is_empty() {
+            let available_pcfs = search_paths.list_available_pcfs();
+            for eff in &root_assets.particle_effects {
+                let eff_bytes = eff.as_bytes();
+                for (pcf_fname, res_pcf) in &available_pcfs {
+                    let rel_pcf = format!("particles/{}", pcf_fname);
+                    if required_pcfs.iter().any(|p| p.eq_ignore_ascii_case(&rel_pcf)) {
+                        continue;
+                    }
+                    if let Ok(pcf_bytes) = search_paths.read_asset(res_pcf) {
+                        if pcf_bytes.windows(eff_bytes.len()).any(|w| w == eff_bytes) {
+                            required_pcfs.push(rel_pcf);
                         }
                     }
+                }
+            }
+        }
+
+        // Extract required PCFs and their materials
+        let pcf_vmt_re = regex::Regex::new(r#"(?i)(?:materials[\/])?([a-zA-Z0-9_\/\.-]+\.vmt)"#).unwrap();
+        for rel_pcf in &required_pcfs {
+            if let Ok(virt_pcf) = VirtualAssetPath::parse(rel_pcf) {
+                if let Some(res_pcf) = search_paths.resolve_asset(rel_pcf) {
+                    let dest_pcf = output_dir.join(rel_pcf);
+                    if let Ok(bytes) = search_paths.extract_asset(&res_pcf, &dest_pcf) {
+                        manifest.record(
+                            virt_pcf,
+                            AssetKind::Particle,
+                            res_pcf.loose_path().map(|p| p.to_path_buf()),
+                            Some(dest_pcf),
+                            AssetStatus::Extracted,
+                            bytes,
+                            res_pcf.label(),
+                        );
+                    }
+
+                    if let Ok(pcf_bytes) = search_paths.read_asset(&res_pcf) {
+                        let text = String::from_utf8_lossy(&pcf_bytes);
+                        for cap in pcf_vmt_re.captures_iter(&text) {
+                            let vmt_ref = normalize_source_path(&cap[1]);
+                            extract_material(
+                                &vmt_ref,
+                                &mut processed_materials,
+                                &mut processed_textures,
+                                &mut manifest,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        // Write or complete maps/<mapname>_particles.txt if we have any particle files
+        if !required_pcfs.is_empty() {
+            let manifest_content = format!(
+                "particles_manifest\n{{\n{}\n}}\n",
+                required_pcfs
+                    .iter()
+                    .map(|p| format!("\t\"file\"\t\"{}\"", p))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            );
+            let dest_manifest = output_dir.join(&particles_rel);
+            if let Some(parent) = dest_manifest.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            if fs::write(&dest_manifest, &manifest_content).is_ok() {
+                if let Ok(virt_p) = VirtualAssetPath::parse(&particles_rel) {
+                    manifest.record(
+                        virt_p,
+                        AssetKind::Auxiliary,
+                        None,
+                        Some(dest_manifest),
+                        AssetStatus::Extracted,
+                        manifest_content.len() as u64,
+                        "Generated/Completed particle manifest",
+                    );
                 }
             }
         }
@@ -761,8 +833,7 @@ pub fn run_scraper(options: ScraperOptions) -> std::io::Result<ScraperStats> {
             }
         }
 
-        // Copy detail VBSP files and extract referenced models
-        let vbsp_mdl_re = regex::Regex::new(r#"(?i)"model"\s+"([^"]+\.mdl)""#).unwrap();
+        // Copy detail VBSP files
         for vbsp_name in &root_assets.detail_vbsps {
             let rel_vbsp = normalize_source_path(vbsp_name);
             if let Ok(virt_vbsp) = VirtualAssetPath::parse(&rel_vbsp) {
@@ -778,23 +849,6 @@ pub fn run_scraper(options: ScraperOptions) -> std::io::Result<ScraperStats> {
                             bytes,
                             "Detail VBSP file",
                         );
-                    }
-
-                    // Parse the .vbsp content to extract any foliage models referenced inside
-                    if let Ok(vbsp_bytes) = search_paths.read_asset(&res_vbsp) {
-                        let text = String::from_utf8_lossy(&vbsp_bytes);
-                        for cap in vbsp_mdl_re.captures_iter(&text) {
-                            let mdl_ref = normalize_source_path(&cap[1]);
-                            if options.extract_models {
-                                extract_model(
-                                    &mdl_ref,
-                                    &mut processed_materials,
-                                    &mut processed_textures,
-                                    &mut processed_models,
-                                    &mut manifest,
-                                );
-                            }
-                        }
                     }
                 } else {
                     manifest.record(

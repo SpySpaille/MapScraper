@@ -10,6 +10,7 @@ pub struct VmfAssets {
     pub direct_vtfs: HashSet<String>,
     pub instances: HashSet<String>,
     pub detail_vbsps: HashSet<String>,
+    pub particle_effects: HashSet<String>,
     pub has_soundscapes: bool,
 }
 
@@ -47,6 +48,20 @@ fn traverse_vmf_block(
                 if k.to_lowercase() == "classname" {
                     if let KVValue::String(s) = v {
                         classname = s.to_lowercase();
+                    }
+                }
+            }
+        }
+
+        let is_particle_sys = is_entity && classname == "info_particle_system";
+        if is_particle_sys {
+            for (k, v) in entries {
+                if k.to_lowercase() == "effect_name" {
+                    if let KVValue::String(s) = v {
+                        let eff = s.trim().to_string();
+                        if !eff.is_empty() {
+                            assets.particle_effects.insert(eff);
+                        }
                     }
                 }
             }
@@ -238,6 +253,14 @@ fn fallback_regex_parse(
             assets.detail_vbsps.insert(vbsp);
         }
     }
+
+    let eff_re = regex::Regex::new(r#"(?i)"effect_name"\s*"([^"]+)""#).unwrap();
+    for cap in eff_re.captures_iter(vmf_content) {
+        let eff = cap[1].trim().to_string();
+        if !eff.is_empty() {
+            assets.particle_effects.insert(eff);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -268,6 +291,10 @@ mod tests {
                 "classname" "func_instance"
                 "file" "instances/door.vmf"
             }
+            entity {
+                "classname" "info_particle_system"
+                "effect_name" "smoke_campfireflame"
+            }
         "#;
         let sound_getters = HashSet::new();
         let assets = parse_vmf(vmf, &sound_getters);
@@ -279,5 +306,6 @@ mod tests {
         assert!(assets.sounds.contains("ambient/wind.wav"));
         assert!(assets.instances.contains("instances/door.vmf"));
         assert!(assets.detail_vbsps.contains("detail_custom.vbsp"));
+        assert!(assets.particle_effects.contains("smoke_campfireflame"));
     }
 }

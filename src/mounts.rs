@@ -229,14 +229,71 @@ impl SearchPathManager {
                                     } else if resolved_dir.exists() {
                                         if resolved_dir.is_dir() {
                                             add_path(
-                                                resolved_dir,
+                                                resolved_dir.clone(),
                                                 &format!("gameinfo.txt ({})", raw_target),
                                             );
-                                        } else if resolved_dir.is_file()
-                                            && raw_target.ends_with(".vpk")
-                                        {
+                                            // Scan any *_dir.vpk directly inside this mounted engine/game folder (e.g. sourceengine/*_dir.vpk)
+                                            if let Ok(entries) = fs::read_dir(&resolved_dir) {
+                                                for entry in entries.flatten() {
+                                                    let ep = entry.path();
+                                                    if ep.is_file() {
+                                                        let ename = ep
+                                                            .file_name()
+                                                            .unwrap_or_default()
+                                                            .to_string_lossy()
+                                                            .to_lowercase();
+                                                        if ename.ends_with("_dir.vpk") {
+                                                            add_vpk(
+                                                                ep,
+                                                                &format!(
+                                                                    "gameinfo.txt VPK ({}/{})",
+                                                                    raw_target, ename
+                                                                ),
+                                                            );
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } else if resolved_dir.is_file() {
+                                            let rlower = raw_target.to_lowercase();
+                                            if rlower.ends_with(".vpk") {
+                                                // If gameinfo specifies a base vpk name without _dir (e.g. hl2_textures.vpk),
+                                                // Source engine actually looks for hl2_textures_dir.vpk if present
+                                                let dir_variant = if !rlower.ends_with("_dir.vpk") {
+                                                    let stem = resolved_dir
+                                                        .file_stem()
+                                                        .unwrap_or_default()
+                                                        .to_string_lossy();
+                                                    resolved_dir
+                                                        .with_file_name(format!("{}_dir.vpk", stem))
+                                                } else {
+                                                    resolved_dir.clone()
+                                                };
+
+                                                if dir_variant.exists() {
+                                                    add_vpk(
+                                                        dir_variant,
+                                                        &format!("gameinfo.txt ({})", raw_target),
+                                                    );
+                                                } else {
+                                                    add_vpk(
+                                                        resolved_dir,
+                                                        &format!("gameinfo.txt ({})", raw_target),
+                                                    );
+                                                }
+                                            }
+                                        }
+                                    } else if raw_target.to_lowercase().ends_with(".vpk") {
+                                        // File directly as named doesn't exist, check _dir.vpk variant
+                                        let stem = resolved_dir
+                                            .file_stem()
+                                            .unwrap_or_default()
+                                            .to_string_lossy();
+                                        let dir_variant = resolved_dir
+                                            .with_file_name(format!("{}_dir.vpk", stem));
+                                        if dir_variant.exists() {
                                             add_vpk(
-                                                resolved_dir,
+                                                dir_variant,
                                                 &format!("gameinfo.txt ({})", raw_target),
                                             );
                                         }
@@ -477,6 +534,70 @@ impl SearchPathManager {
                 }
             }
         }
+    }
+
+    /// Discovers all available particle PCF files across mounted search paths.
+    pub fn list_available_pcfs(&self) -> Vec<(String, ResolvedAsset)> {
+        let mut pcfs = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+
+        // Check loose directories
+        for sp in &self.all_paths {
+            let pdir = sp.path.join("particles");
+            if let Ok(entries) = fs::read_dir(&pdir) {
+                for entry in entries.flatten() {
+                    let ep = entry.path();
+                    if ep.is_file() {
+                        let name = ep.file_name().unwrap_or_default().to_string_lossy().to_lowercase();
+                        if name.ends_with(".pcf") && !seen.contains(&name) {
+                            seen.insert(name.clone());
+                                                        pcfs.push((name, ResolvedAsset::Loose {
+                                path: ep,
+                                label: sp.label.clone(),
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Check VPK archives
+        for (vpk_idx, vpk) in self.vpks.iter().enumerate() {
+            for entry_name in vpk.entries() {
+                let lower = entry_name.to_lowercase();
+                if lower.starts_with("particles/") && lower.ends_with(".pcf") {
+                    let fname = lower.strip_prefix("particles/").unwrap_or(&lower).to_string();
+                    if !seen.contains(&fname) {
+                        seen.insert(fname.clone());
+                        pcfs.push((fname, ResolvedAsset::Vpk {
+                            vpk_index: vpk_idx,
+                            rel_path: entry_name.clone(),
+                            label: vpk.label.clone(),
+                        }));
+                    }
+                }
+            }
+        }
+
+        // Check GMA archives
+        for (gma_idx, gma) in self.gmas.iter().enumerate() {
+            for entry_name in gma.entries.keys() {
+                let lower = entry_name.to_lowercase();
+                if lower.starts_with("particles/") && lower.ends_with(".pcf") {
+                    let fname = lower.strip_prefix("particles/").unwrap_or(&lower).to_string();
+                    if !seen.contains(&fname) {
+                        seen.insert(fname.clone());
+                        pcfs.push((fname, ResolvedAsset::Gma {
+                            gma_index: gma_idx,
+                            rel_path: entry_name.clone(),
+                            label: gma.label.clone(),
+                        }));
+                    }
+                }
+            }
+        }
+
+        pcfs
     }
 }
 

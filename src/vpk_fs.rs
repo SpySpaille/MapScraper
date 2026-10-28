@@ -72,4 +72,7 @@ impl VpkArchive {
         fs::write(dest_ref, &bytes)?;
         Ok(bytes.len() as u64)
     }
+    pub fn entries(&self) -> impl Iterator<Item = &String> {
+        self.entry_index.keys()
+    }
 }

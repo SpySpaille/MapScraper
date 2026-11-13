@@ -125,15 +125,26 @@ impl Manifest {
         s
     }
 
-    /// Generates bspzip -addorupdatelist file entries exclusively for auxiliary companion files.
-    /// In Garry's Mod / Source engine mapping, models, textures, materials and sounds
-    /// must remain as loose files in the addon directory for distribution (Workshop / FastDL),
-    /// while only auxiliary map files (.ain nodegraph, .nav mesh, map thumbnail, particles list, soundscapes)
-    /// are embedded into the BSP pakfile.
+    /// Only pack map-specific companions and particle archives selected by the scraper.
     pub fn generate_bspzip_list(&self) -> Vec<String> {
+        let map = self.map_name.to_lowercase();
+        let companion_paths = [
+            format!("maps/{map}.ain"),
+            format!("maps/graphs/{map}.ain"),
+            format!("maps/{map}.nav"),
+            format!("maps/thumb/{map}.png"),
+            format!("maps/{map}_particles.txt"),
+            format!("scripts/soundscapes_{map}.txt"),
+        ];
+
         let mut lines = Vec::new();
-        for record in self.records.values() {
-            if record.status == AssetStatus::Extracted && record.kind == AssetKind::Auxiliary {
+        for (path, record) in &self.records {
+            let allowed = match record.kind {
+                AssetKind::Auxiliary => companion_paths.contains(path),
+                AssetKind::Particle => path.starts_with("particles/") && path.ends_with(".pcf"),
+                _ => false,
+            };
+            if record.status == AssetStatus::Extracted && allowed {
                 if let Some(dest) = &record.dest_path {
                     if dest.exists() {
                         lines.push(record.virtual_path.as_str().to_string());

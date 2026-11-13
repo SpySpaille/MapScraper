@@ -220,9 +220,7 @@ fn main() {
     let extract_sounds = prompt_yn("🔊 Extract Sounds");
     let include_detail_models =
         extract_models && prompt_yn("   Include foliage models listed in detail VBSP files");
-    let ready_to_publish = prompt_yn("📤 Ready to Publish (copy BSP and companion files)");
-    let pack_bsp =
-        ready_to_publish && prompt_yn("   Embed new or changed companion files into the BSP");
+    let ready_to_publish = prompt_yn("📤 Ready to Publish (embed map companion files)");
 
     let options = ScraperOptions {
         game_path,
@@ -232,7 +230,7 @@ fn main() {
         extract_sounds,
         ready_to_publish,
         include_detail_models,
-        pack_bsp,
+        pack_bsp: ready_to_publish,
         custom_mounts: Vec::new(),
         output_dir: None,
     };

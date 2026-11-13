@@ -15,7 +15,7 @@ MapScraper is a high-performance Source Engine utility that extracts a map's ref
 - **🔊 Sound Extraction**: Extracts ambient and entity audio, parses `soundscapes_<mapname>.txt`, and automatically cleans Source Engine sound flags (`)`, `*`, `^`, `#`, `~`, `>`).
 - **🔄 Func_instance Support**: Resolves and recursively analyzes sub-VMF instance entities, extracting all nested assets and copying instance files for publishing.
 - **🔗 Mounted Directories Support**: Automatically detects mounted games from `cfg/mount.cfg` and `gameinfo.txt` (e.g. Counter-Strike: Source, Team Fortress 2, Half-Life 2), and seamlessly collects assets from all mounted folders into your map's output.
-- **📤 Ready to Publish & Packing**: Copies the compiled BSP as-is alongside map companion files and source VMFs. Use `--pack-bsp` to embed new or changed companions with `bspzip.exe`.
+- **📤 Ready to Publish & Packing**: Embeds new or changed map companions with `bspzip.exe`, including navigation, map particle manifests and their selected `.pcf` files, soundscapes and thumbnails. Use `--publish --no-pack-bsp` to copy the BSP as-is.
 - **⚡ Offline-First & Optimized**: Uses local bundled asset getters with optional online updates, concurrent async file copying, and duplicate-safe caching.
 
 ---
@@ -37,8 +37,7 @@ $ - 🧱 Extract Materials [y/n] > y
 $ - 📐 Extract Models [y/n] > y
 $ -    Include foliage models listed in detail VBSP files [y/n] > n
 $ - 🔊 Extract Sounds [y/n] > y
-$ - 📤 Ready to Publish (copy BSP and companion files) [y/n] > y
-$ -    Embed new or changed companion files into the BSP [y/n] > n
+$ - 📤 Ready to Publish (embed map companion files) [y/n] > y
 ```
 
 Use `--include-detail-models` to collect models listed in detail VBSP definitions when you need the full foliage library. Models explicitly referenced by the map are collected whenever model extraction is enabled.

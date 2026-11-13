@@ -4,11 +4,11 @@ All notable changes to **MapScraper** will be documented in this file.
 
 ## [1.8.2] - 2026-11-13
 
-- Publishing copies the original BSP byte for byte by default. It prefers the BSP next to the VMF, falling back to the game's map directory.
-- Optional BSP packing submits only new or changed map companion files, skips entries it cannot compare, and falls back to the original BSP if packing fails or produces excessive growth.
-- Materials inside the BSP are resolved on demand instead of sweeping every packed material. Existing compiled lighting and other BSP contents are preserved.
-- Models listed in detail VBSP definitions are opt-in. Explicit VMF model references and publishing of detail definitions remain supported.
-- The BSP reader indexes the pakfile without loading the whole archive into memory.
+- Ready to Publish embeds new or changed map companions: navigation, node graphs, thumbnails, soundscapes, particle manifests and selected particle archives.
+- The packing list excludes lighting files, models and materials. Identical companions are skipped. If packing fails or causes excessive growth, publishing copies the original BSP.
+- Use `--publish --no-pack-bsp` to copy the original BSP byte for byte.
+- BSP materials are resolved on demand. The pakfile is indexed without loading the whole archive into memory.
+- Collecting models from detail VBSP definitions is opt-in. Explicit VMF model references and publishing of detail definitions remain supported.
 
 ## [1.8.1] - 2026-10-19
 

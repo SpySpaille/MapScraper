@@ -12,7 +12,7 @@ pub struct CliArgs {
     pub extract_sounds: Option<bool>,
     pub ready_to_publish: Option<bool>,
     pub include_detail_models: bool,
-    pub pack_bsp: bool,
+    pub pack_bsp: Option<bool>,
     pub is_cli_mode: bool,
 }
 
@@ -87,8 +87,12 @@ pub fn parse_cli_args(args: &[String]) -> Result<CliArgs, String> {
                 cli.is_cli_mode = true;
             }
             "--pack-bsp" => {
-                cli.pack_bsp = true;
+                cli.pack_bsp = Some(true);
                 cli.ready_to_publish = Some(true);
+                cli.is_cli_mode = true;
+            }
+            "--no-pack-bsp" => {
+                cli.pack_bsp = Some(false);
                 cli.is_cli_mode = true;
             }
             _ => {}
@@ -128,7 +132,9 @@ pub fn to_scraper_options(cli: CliArgs) -> Result<ScraperOptions, String> {
         extract_sounds: cli.extract_sounds.unwrap_or(true),
         ready_to_publish: cli.ready_to_publish.unwrap_or(false),
         include_detail_models: cli.include_detail_models,
-        pack_bsp: cli.pack_bsp,
+        pack_bsp: cli
+            .pack_bsp
+            .unwrap_or(cli.ready_to_publish.unwrap_or(false)),
         custom_mounts: cli.custom_mounts,
         output_dir: cli.output_dir,
     })
@@ -153,8 +159,9 @@ OPTIONS:
         --no-models         Do not extract models
         --sounds            Extract sounds (default: true)
         --no-sounds         Do not extract sounds
-    -p, --publish           Ready to publish (copy BSP and companion files)
-        --pack-bsp          Embed new or changed companion files (implies --publish)
+    -p, --publish           Ready to publish (embed map companion files)
+        --pack-bsp          Alias for --publish with packing enabled
+        --no-pack-bsp       Keep the BSP as-is when publishing
         --include-detail-models  Include models listed in detail VBSP files
     -h, --help              Print help information
     -v, --version           Print version information

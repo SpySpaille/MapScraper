@@ -32,99 +32,87 @@ impl BspArchive {
 
         let lump_idx = 40; // LUMP_PAKFILE
         let lump_pos = 8 + lump_idx * 16;
+        let invalid_pak = || io::Error::new(io::ErrorKind::InvalidData, "Invalid BSP pakfile");
         let lump_offset =
-            i32::from_le_bytes(header[lump_pos..lump_pos + 4].try_into().unwrap()) as u64;
+            u32::from_le_bytes(header[lump_pos..lump_pos + 4].try_into().unwrap()) as u64;
         let lump_len =
-            i32::from_le_bytes(header[lump_pos + 4..lump_pos + 8].try_into().unwrap()) as u64;
+            u32::from_le_bytes(header[lump_pos + 4..lump_pos + 8].try_into().unwrap()) as u64;
+        let lump_end = lump_offset + lump_len;
 
         let mut entries = HashMap::new();
-        if lump_len > 22 {
-            let mut lump_bytes = vec![0u8; lump_len as usize];
-            file.seek(SeekFrom::Start(lump_offset))?;
-            file.read_exact(&mut lump_bytes)?;
-
-            // Find End of Central Directory record (0x06054b50)
-            let mut eocd_pos = None;
-            for i in (0..lump_bytes.len().saturating_sub(22)).rev() {
-                if &lump_bytes[i..i + 4] == b"PK\x05\x06" {
-                    eocd_pos = Some(i);
-                    break;
-                }
+        if lump_len != 0 {
+            if lump_len < 22 || lump_end > file.metadata()?.len() {
+                return Err(invalid_pak());
             }
+            // Read only the ZIP directory and local headers; pakfiles can be hundreds of MB.
+            let tail_len = lump_len.min(22 + u16::MAX as u64);
+            let mut tail = vec![0; tail_len as usize];
+            file.seek(SeekFrom::Start(lump_end - tail_len))?;
+            file.read_exact(&mut tail)?;
+            let u16_at = |bytes: &[u8], i| u16::from_le_bytes(bytes[i..i + 2].try_into().unwrap());
+            let u32_at = |bytes: &[u8], i| u32::from_le_bytes(bytes[i..i + 4].try_into().unwrap());
+            let end = (0..=tail.len() - 22)
+                .rev()
+                .find(|&i| {
+                    &tail[i..i + 4] == b"PK\x05\x06"
+                        && (i + 22 + u16_at(&tail, i + 20) as usize <= tail.len())
+                })
+                .ok_or_else(invalid_pak)?;
+            let directory_end = lump_end - tail_len + end as u64;
+            let mut cursor = lump_offset + u32_at(&tail, end + 16) as u64;
 
-            if let Some(pos) = eocd_pos {
-                let cd_offset = u32::from_le_bytes(
-                    lump_bytes[pos + 16..pos + 20].try_into().unwrap(),
-                ) as usize;
-                let cd_entries = u16::from_le_bytes(
-                    lump_bytes[pos + 10..pos + 12].try_into().unwrap(),
-                ) as usize;
-
-                let mut cur = cd_offset;
-                for _ in 0..cd_entries {
-                    if cur + 46 > lump_bytes.len() || &lump_bytes[cur..cur + 4] != b"PK\x01\x02" {
-                        break;
-                    }
-                    let method =
-                        u16::from_le_bytes(lump_bytes[cur + 10..cur + 12].try_into().unwrap());
-                    let comp_size =
-                        u32::from_le_bytes(lump_bytes[cur + 20..cur + 24].try_into().unwrap())
-                            as u64;
-                    let uncomp_size =
-                        u32::from_le_bytes(lump_bytes[cur + 24..cur + 28].try_into().unwrap())
-                            as u64;
-                    let fname_len =
-                        u16::from_le_bytes(lump_bytes[cur + 28..cur + 30].try_into().unwrap())
-                            as usize;
-                    let extra_len =
-                        u16::from_le_bytes(lump_bytes[cur + 30..cur + 32].try_into().unwrap())
-                            as usize;
-                    let comment_len =
-                        u16::from_le_bytes(lump_bytes[cur + 32..cur + 34].try_into().unwrap())
-                            as usize;
-                    let local_hdr_offset =
-                        u32::from_le_bytes(lump_bytes[cur + 42..cur + 46].try_into().unwrap())
-                            as usize;
-
-                    let raw_name =
-                        String::from_utf8_lossy(&lump_bytes[cur + 46..cur + 46 + fname_len]);
-                    let norm_name = raw_name
-                        .replace('\\', "/")
-                        .trim_start_matches('/')
-                        .to_lowercase();
-
-                    if local_hdr_offset + 30 <= lump_bytes.len()
-                        && &lump_bytes[local_hdr_offset..local_hdr_offset + 4] == b"PK\x03\x04"
-                    {
-                        let l_fname_len = u16::from_le_bytes(
-                            lump_bytes[local_hdr_offset + 26..local_hdr_offset + 28]
-                                .try_into()
-                                .unwrap(),
-                        ) as usize;
-                        let l_extra_len = u16::from_le_bytes(
-                            lump_bytes[local_hdr_offset + 28..local_hdr_offset + 30]
-                                .try_into()
-                                .unwrap(),
-                        ) as usize;
-                        let data_start = lump_offset
-                            + local_hdr_offset as u64
-                            + 30
-                            + l_fname_len as u64
-                            + l_extra_len as u64;
-
-                        entries.insert(
-                            norm_name,
-                            BspEntry {
-                                offset: data_start,
-                                comp_size,
-                                uncomp_size,
-                                method,
-                            },
-                        );
-                    }
-
-                    cur += 46 + fname_len + extra_len + comment_len;
+            for _ in 0..u16_at(&tail, end + 10) {
+                let mut central = [0; 46];
+                if cursor + 46 > directory_end {
+                    return Err(invalid_pak());
                 }
+                file.seek(SeekFrom::Start(cursor))?;
+                file.read_exact(&mut central)?;
+                if &central[..4] != b"PK\x01\x02" {
+                    return Err(invalid_pak());
+                }
+                let name_len = u16_at(&central, 28) as usize;
+                cursor += 46
+                    + name_len as u64
+                    + u16_at(&central, 30) as u64
+                    + u16_at(&central, 32) as u64;
+                if cursor > directory_end {
+                    return Err(invalid_pak());
+                }
+                let mut name = vec![0; name_len];
+                file.read_exact(&mut name)?;
+                let norm_name = String::from_utf8_lossy(&name)
+                    .replace('\\', "/")
+                    .trim_start_matches('/')
+                    .to_lowercase();
+
+                let local_offset = lump_offset + u32_at(&central, 42) as u64;
+                let mut local = [0; 30];
+                if local_offset + 30 > directory_end {
+                    return Err(invalid_pak());
+                }
+                file.seek(SeekFrom::Start(local_offset))?;
+                file.read_exact(&mut local)?;
+                if &local[..4] != b"PK\x03\x04" {
+                    return Err(invalid_pak());
+                }
+                let offset =
+                    local_offset + 30 + u16_at(&local, 26) as u64 + u16_at(&local, 28) as u64;
+                let method = u16_at(&central, 10);
+                let comp_size = u32_at(&central, 20) as u64;
+                let uncomp_size = u32_at(&central, 24) as u64;
+                if offset + comp_size > directory_end || (method == 0 && comp_size != uncomp_size) {
+                    return Err(invalid_pak());
+                }
+                entries.insert(
+                    norm_name,
+                    BspEntry {
+                        offset,
+                        comp_size,
+                        uncomp_size,
+                        method,
+                    },
+                );
             }
         }
 

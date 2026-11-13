@@ -1,6 +1,6 @@
 [package]
 name = "mapscraper"
-version = "1.8.1"
+version = "1.8.2"
 authors = ["SpySpaille"]
 edition = "2021"
 description = "High-performance Source Engine content scraper for VMF maps"

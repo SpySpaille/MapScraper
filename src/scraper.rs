@@ -1,9 +1,11 @@
 use colored::Colorize;
 use std::collections::HashSet;
 use std::fs;
-use std::path::PathBuf;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::bsp::BspArchive;
 use crate::getters::Getters;
 use crate::instance::{InstanceFile, InstanceResolver};
 use crate::mdl::{parse_mdl_textures, MODEL_VARIANTS};
@@ -21,6 +23,8 @@ pub struct ScraperOptions {
     pub extract_models: bool,
     pub extract_sounds: bool,
     pub ready_to_publish: bool,
+    pub include_detail_models: bool,
+    pub pack_bsp: bool,
     pub custom_mounts: Vec<String>,
     pub output_dir: Option<PathBuf>,
 }
@@ -83,6 +87,80 @@ impl Drop for Spinner {
     }
 }
 
+fn collect_detail_models(
+    entries: &[(String, crate::keyvalues::KVValue)],
+    models: &mut HashSet<String>,
+) {
+    for (key, value) in entries {
+        if let Some(children) = value.as_block() {
+            collect_detail_models(children, models);
+        } else if key.eq_ignore_ascii_case("model") {
+            if let Some(path) = value.as_str() {
+                let path = normalize_source_path(path);
+                if path.to_ascii_lowercase().ends_with(".mdl") {
+                    models.insert(path);
+                }
+            }
+        }
+    }
+}
+
+fn pack_companions(
+    archive: &BspArchive,
+    game_path: &Path,
+    dest: &Path,
+    manifest: &Manifest,
+) -> io::Result<bool> {
+    let mut lines = Vec::new();
+    // Allow ZIP headers and Source alignment padding, plus the new file payloads.
+    let mut max_growth = 1024 * 1024;
+    for pair in manifest.generate_bspzip_list().chunks_exact(2) {
+        let [name, source] = [&pair[0], &pair[1]];
+        let bytes = fs::read(source)?;
+        if archive.has_file(name) {
+            match archive.read_file(name) {
+                Ok(old) if old != bytes => {}
+                // Leave existing entries alone if we cannot compare their contents.
+                _ => continue,
+            }
+        }
+        max_growth += bytes.len() as u64;
+        lines.extend_from_slice(pair);
+    }
+    if lines.is_empty() {
+        return Ok(false);
+    }
+
+    let bspzip = game_path
+        .parent()
+        .unwrap_or(game_path)
+        .join("bin/bspzip.exe");
+    let maps_dir = dest.parent().expect("BSP output has a parent");
+    fs::create_dir_all(maps_dir)?;
+    let list_path = maps_dir.join("mapscraper-zipfiles.txt");
+    fs::write(&list_path, lines.join("\n"))?;
+    let result = Command::new(bspzip)
+        .arg("-addorupdatelist")
+        .arg(&archive.path)
+        .arg(&list_path)
+        .arg(dest)
+        .output();
+    let _ = fs::remove_file(&list_path);
+    if !result?.status.success() {
+        return Err(io::Error::other("bspzip failed"));
+    }
+    if fs::metadata(dest)?.len()
+        > fs::metadata(&archive.path)?
+            .len()
+            .saturating_add(max_growth)
+    {
+        return Err(io::Error::other(
+            "bspzip output grew beyond the size of the companion files",
+        ));
+    }
+    Ok(true)
+}
+
 pub fn run_scraper(options: ScraperOptions) -> std::io::Result<ScraperStats> {
     let map_name = options
         .vmf_path
@@ -139,22 +217,16 @@ pub fn run_scraper(options: ScraperOptions) -> std::io::Result<ScraperStats> {
         }
     }
 
-    // Mount companion BSP pakfile if available
-    let bsp_candidates = [
-        options.vmf_path.with_extension("bsp"),
+    // Use the same BSP for extraction, duplicate checks and publication.
+    let adjacent_bsp = options.vmf_path.with_extension("bsp");
+    let bsp_path = adjacent_bsp.is_file().then_some(adjacent_bsp).or_else(|| {
         search_paths
-            .primary_path
-            .join("maps")
-            .join(format!("{}.bsp", map_name)),
-    ];
-    for bsp_cand in &bsp_candidates {
-        if bsp_cand.exists() && bsp_cand.is_file() && search_paths.mount_bsp(bsp_cand) {
-            println!(
-                "   \x1b[90m├─\x1b[0m {}: {}",
-                "BSP Pakfile".green(),
-                bsp_cand.display().to_string().white()
-            );
-            break;
+            .resolve(&format!("maps/{map_name}.bsp"))
+            .filter(|p| p.is_file())
+    });
+    if let Some(path) = &bsp_path {
+        if search_paths.mount_bsp(path) {
+            println!("   BSP Pakfile: {}", path.display());
         }
     }
 
@@ -183,6 +255,9 @@ pub fn run_scraper(options: ScraperOptions) -> std::io::Result<ScraperStats> {
         root_assets.sounds.extend(inst_assets.sounds);
         root_assets.direct_vtfs.extend(inst_assets.direct_vtfs);
         root_assets.detail_vbsps.extend(inst_assets.detail_vbsps);
+        root_assets
+            .particle_effects
+            .extend(inst_assets.particle_effects);
         if inst_assets.has_soundscapes {
             root_assets.has_soundscapes = true;
         }
@@ -560,22 +635,6 @@ pub fn run_scraper(options: ScraperOptions) -> std::io::Result<ScraperStats> {
             );
         }
 
-        // Also extract and process map-specific patch materials from any mounted BSP pakfiles
-        for bsp in &search_paths.bsps {
-            let bsp_entries: Vec<String> = bsp.entries.keys().cloned().collect();
-            for entry_name in bsp_entries {
-                if entry_name.starts_with("materials/") && entry_name.ends_with(".vmt") {
-                    let rel_mat = &entry_name["materials/".len()..entry_name.len() - 4];
-                    extract_material(
-                        rel_mat,
-                        &mut processed_materials,
-                        &mut processed_textures,
-                        &mut manifest,
-                    );
-                }
-            }
-        }
-
         for vtf in &root_assets.direct_vtfs {
             let norm_tex = normalize_texture_path(vtf);
             let tex_lower = norm_tex.to_lowercase();
@@ -631,15 +690,15 @@ pub fn run_scraper(options: ScraperOptions) -> std::io::Result<ScraperStats> {
     }
 
     // 7. Resolve detail VBSP models & Extract 3D models
-    let vbsp_mdl_re = regex::Regex::new(r#"(?i)"model"\s+"([^"]+\.mdl)""#).unwrap();
-    for vbsp_name in &root_assets.detail_vbsps {
-        let rel_vbsp = normalize_source_path(vbsp_name);
-        if let Some(res_vbsp) = search_paths.resolve_asset(&rel_vbsp) {
-            if let Ok(vbsp_bytes) = search_paths.read_asset(&res_vbsp) {
-                let text = String::from_utf8_lossy(&vbsp_bytes);
-                for cap in vbsp_mdl_re.captures_iter(&text) {
-                    let mdl_ref = normalize_source_path(&cap[1]);
-                    root_assets.models.insert(mdl_ref);
+    if options.extract_models && options.include_detail_models {
+        for vbsp_name in &root_assets.detail_vbsps {
+            if let Some(resolved) = search_paths.resolve_asset(vbsp_name) {
+                if let Ok(bytes) = search_paths.read_asset(&resolved) {
+                    if let Ok(doc) =
+                        crate::keyvalues::parse_keyvalues(&String::from_utf8_lossy(&bytes))
+                    {
+                        collect_detail_models(&doc.root_entries, &mut root_assets.models);
+                    }
                 }
             }
         }
@@ -708,12 +767,17 @@ pub fn run_scraper(options: ScraperOptions) -> std::io::Result<ScraperStats> {
                 let pcf_re = regex::Regex::new(r#"(?i)"file"\s+"([^"]+)""#).unwrap();
                 for cap in pcf_re.captures_iter(&content) {
                     let clean_pcf = normalize_source_path(&cap[1]);
-                    if !required_pcfs.iter().any(|p| p.eq_ignore_ascii_case(&clean_pcf)) {
+                    if !required_pcfs
+                        .iter()
+                        .any(|p| p.eq_ignore_ascii_case(&clean_pcf))
+                    {
                         required_pcfs.push(clean_pcf);
                     }
                 }
             }
         }
+
+        let original_pcf_count = required_pcfs.len();
 
         // For all info_particle_system effect_name in VMF / instances, find matching PCF files
         if !root_assets.particle_effects.is_empty() {
@@ -722,7 +786,10 @@ pub fn run_scraper(options: ScraperOptions) -> std::io::Result<ScraperStats> {
                 let eff_bytes = eff.as_bytes();
                 for (pcf_fname, res_pcf) in &available_pcfs {
                     let rel_pcf = format!("particles/{}", pcf_fname);
-                    if required_pcfs.iter().any(|p| p.eq_ignore_ascii_case(&rel_pcf)) {
+                    if required_pcfs
+                        .iter()
+                        .any(|p| p.eq_ignore_ascii_case(&rel_pcf))
+                    {
                         continue;
                     }
                     if let Ok(pcf_bytes) = search_paths.read_asset(res_pcf) {
@@ -735,7 +802,8 @@ pub fn run_scraper(options: ScraperOptions) -> std::io::Result<ScraperStats> {
         }
 
         // Extract required PCFs and their materials
-        let pcf_vmt_re = regex::Regex::new(r#"(?i)(?:materials[\/])?([a-zA-Z0-9_\/\.-]+\.vmt)"#).unwrap();
+        let pcf_vmt_re =
+            regex::Regex::new(r#"(?i)(?:materials[\/])?([a-zA-Z0-9_\/\.-]+\.vmt)"#).unwrap();
         for rel_pcf in &required_pcfs {
             if let Ok(virt_pcf) = VirtualAssetPath::parse(rel_pcf) {
                 if let Some(res_pcf) = search_paths.resolve_asset(rel_pcf) {
@@ -769,7 +837,7 @@ pub fn run_scraper(options: ScraperOptions) -> std::io::Result<ScraperStats> {
         }
 
         // Write or complete maps/<mapname>_particles.txt if we have any particle files
-        if !required_pcfs.is_empty() {
+        if required_pcfs.len() > original_pcf_count {
             let manifest_content = format!(
                 "particles_manifest\n{{\n{}\n}}\n",
                 required_pcfs
@@ -864,38 +932,28 @@ pub fn run_scraper(options: ScraperOptions) -> std::io::Result<ScraperStats> {
             }
         }
 
-        // Auxiliary BSP Packing with bspzip.exe (packing ONLY companion map files into the BSP)
-        let bsp_rel = format!("maps/{}.bsp", map_name);
-        if let Some(resolved_bsp) = search_paths.resolve(&bsp_rel) {
-            if let Some(parent) = search_paths.primary_path.parent() {
-                let bspzip = parent.join("bin").join("bspzip.exe");
-                let bspzip_entries = manifest.generate_bspzip_list();
-
-                if bspzip.exists() && !bspzip_entries.is_empty() {
-                    let zipfile_path = output_dir.join("zipfiles.txt");
-                    if fs::write(&zipfile_path, bspzip_entries.join("\n")).is_ok() {
-                        let dest_bsp = output_dir.join("maps").join(format!("{}.bsp", map_name));
-                        if let Some(dest_parent) = dest_bsp.parent() {
-                            let _ = fs::create_dir_all(dest_parent);
-                        }
-
-                        let output = Command::new(&bspzip)
-                            .args([
-                                "-addorupdatelist",
-                                &resolved_bsp.to_string_lossy(),
-                                &zipfile_path.to_string_lossy(),
-                                &dest_bsp.to_string_lossy(),
-                            ])
-                            .output();
-
-                        if let Ok(out) = output {
-                            if out.status.success() && dest_bsp.exists() {
-                                bsp_packed = true;
-                            }
-                        }
-                        let _ = fs::remove_file(&zipfile_path);
-                    }
+        if let Some(source) = &bsp_path {
+            let dest = output_dir.join("maps").join(format!("{map_name}.bsp"));
+            if options.pack_bsp {
+                let result = search_paths
+                    .bsps
+                    .first()
+                    .ok_or_else(|| {
+                        std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            "Cannot read source BSP pakfile",
+                        )
+                    })
+                    .and_then(|archive| {
+                        pack_companions(archive, &search_paths.primary_path, &dest, &manifest)
+                    });
+                match result {
+                    Ok(packed) => bsp_packed = packed,
+                    Err(err) => eprintln!("BSP packing skipped: {err}. Copying the original BSP."),
                 }
+            }
+            if !bsp_packed {
+                safe_copy_file(source, &dest)?;
             }
         }
 

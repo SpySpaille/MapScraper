@@ -5,7 +5,7 @@ use mapscraper::utils::clean_quotes;
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 
-const CURRENT_VERSION: &str = "1.8.1";
+const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 const GITHUB_USER: &str = "SpySpaille";
 
 fn print_banner() {
@@ -218,7 +218,11 @@ fn main() {
     let extract_materials = prompt_yn("🧱 Extract Materials");
     let extract_models = prompt_yn("📐 Extract Models");
     let extract_sounds = prompt_yn("🔊 Extract Sounds");
-    let ready_to_publish = prompt_yn("📤 Ready to Publish (all other contents & pack)");
+    let include_detail_models =
+        extract_models && prompt_yn("   Include foliage models listed in detail VBSP files");
+    let ready_to_publish = prompt_yn("📤 Ready to Publish (copy BSP and companion files)");
+    let pack_bsp =
+        ready_to_publish && prompt_yn("   Embed new or changed companion files into the BSP");
 
     let options = ScraperOptions {
         game_path,
@@ -227,6 +231,8 @@ fn main() {
         extract_models,
         extract_sounds,
         ready_to_publish,
+        include_detail_models,
+        pack_bsp,
         custom_mounts: Vec::new(),
         output_dir: None,
     };

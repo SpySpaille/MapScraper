@@ -11,6 +11,8 @@ pub struct CliArgs {
     pub extract_models: Option<bool>,
     pub extract_sounds: Option<bool>,
     pub ready_to_publish: Option<bool>,
+    pub include_detail_models: bool,
+    pub pack_bsp: bool,
     pub is_cli_mode: bool,
 }
 
@@ -80,6 +82,15 @@ pub fn parse_cli_args(args: &[String]) -> Result<CliArgs, String> {
                 cli.ready_to_publish = Some(true);
                 cli.is_cli_mode = true;
             }
+            "--include-detail-models" => {
+                cli.include_detail_models = true;
+                cli.is_cli_mode = true;
+            }
+            "--pack-bsp" => {
+                cli.pack_bsp = true;
+                cli.ready_to_publish = Some(true);
+                cli.is_cli_mode = true;
+            }
             _ => {}
         }
         i += 1;
@@ -116,6 +127,8 @@ pub fn to_scraper_options(cli: CliArgs) -> Result<ScraperOptions, String> {
         extract_models: cli.extract_models.unwrap_or(true),
         extract_sounds: cli.extract_sounds.unwrap_or(true),
         ready_to_publish: cli.ready_to_publish.unwrap_or(false),
+        include_detail_models: cli.include_detail_models,
+        pack_bsp: cli.pack_bsp,
         custom_mounts: cli.custom_mounts,
         output_dir: cli.output_dir,
     })
@@ -140,7 +153,9 @@ OPTIONS:
         --no-models         Do not extract models
         --sounds            Extract sounds (default: true)
         --no-sounds         Do not extract sounds
-    -p, --publish           Ready to publish (extract auxiliary files and pack BSP)
+    -p, --publish           Ready to publish (copy BSP and companion files)
+        --pack-bsp          Embed new or changed companion files (implies --publish)
+        --include-detail-models  Include models listed in detail VBSP files
     -h, --help              Print help information
     -v, --version           Print version information
 "#
